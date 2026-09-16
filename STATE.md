@@ -228,9 +228,38 @@ simpler, uniform design** after implementation began (fewer moving parts, same r
 - Tool access gating: `app/components/auth/AccessGate.tsx` (`tier: free|pro`).
 - Chart components in `app/components/charts/`.
 
+## EF Migrations (session 3)
+
+- ✅ `Microsoft.EntityFrameworkCore.Design` 9.0.9 added to Persistence + Web.Api (EF tooling requirement)
+- ✅ DI fix: `ValuationDbContext` registered via `AddDbContext` (Identity stores + EF tooling need it;
+     before this, runtime startup would have failed)
+- ✅ DI fix: `PharmaPatentValuationRunner` now shares the same singleton `PatentValuationRunner`
+     instance (register concrete type + forward) — DI validation was failing before
+- ✅ **`InitialCreate` migration generated**: `Infrastructure/Persistance/Migrations/20260916194536_InitialCreate.cs`
+     (26 tables: AspNet* identity + Assessments, AssessmentVersions, Steps, Questions, Options,
+     Answers, ScoredAnswers, AssessmentAttempts, AssessmentResults, Companies, Payments,
+     ToolForms, ToolSubmissions, CalculationConfigs, Math*, ValidationRules, VisibilityConditions)
+
+**Migration workflow (use these exact commands from `src/`):**
+```bash
+dotnet ef migrations add <Name> \
+  --project Infrastructure/Persistance/Persistence.csproj \
+  --startup-project Web/Api/Web.csproj \
+  --context ValuationDbContext \
+  --output-dir Migrations
+
+dotnet ef database update \
+  --project Infrastructure/Persistance/Persistence.csproj \
+  --startup-project Web/Api/Web.csproj \
+  --context ValuationDbContext
+```
+Note: `--context ValuationDbContext` is required — the solution has 3 DbContext classes
+(ValuationDbContext, WriteOnlyDbContext, ReadOnlyDbContext).
+
 ## Remaining / next steps
 
-- [ ] Run EF migrations against real DB and smoke-test auth + payment + seed flow end to end.
+- [ ] `dotnet ef database update` (command above) against the dev SQL Server, then
+      smoke-test auth + payment + seed + admin flow end to end.
 - [ ] Smoke-test each tool page in the browser (backend running + logged in).
 - [ ] Smoke-test the admin area (dashboard/customers/payments) with a seeded admin account.
 - [ ] Zarinpal production merchant + webhook signature validation.

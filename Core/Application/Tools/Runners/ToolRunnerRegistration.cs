@@ -29,13 +29,19 @@ public static class ToolRunnerRegistration
         services.AddSingleton<IToolRunner, IpscoreRunner>();
 
         // Calculators
-        services.AddSingleton<IToolRunner, StartupValuationRunner>();
-        services.AddSingleton<IToolRunner, BrandValuationRunner>();
-        services.AddSingleton<IToolRunner, TrademarkValuationRunner>();
-        services.AddSingleton<IToolRunner, PatentValuationRunner>();       // general-ip-valuation
+        services.AddSingleton<StartupValuationRunner>();
+        services.AddSingleton<IToolRunner, StartupValuationRunner>(sp => sp.GetRequiredService<StartupValuationRunner>());
+        services.AddSingleton<BrandValuationRunner>();
+        services.AddSingleton<IToolRunner, BrandValuationRunner>(sp => sp.GetRequiredService<BrandValuationRunner>());
+        services.AddSingleton<TrademarkValuationRunner>();
+        services.AddSingleton<IToolRunner, TrademarkValuationRunner>(sp => sp.GetRequiredService<TrademarkValuationRunner>());
+        services.AddSingleton<PatentValuationRunner>();                    // general-ip-valuation engine
+        services.AddSingleton<IToolRunner, PatentValuationRunner>(sp => sp.GetRequiredService<PatentValuationRunner>());
         services.AddSingleton<IToolRunner, PharmaPatentValuationRunner>(); // pharma-ip-valuation (same engine)
-        services.AddSingleton<IToolRunner, IntangibleAssetsRunner>();
-        services.AddSingleton<IToolRunner, KnowhowValuationRunner>();
+        services.AddSingleton<IntangibleAssetsRunner>();
+        services.AddSingleton<IToolRunner, IntangibleAssetsRunner>(sp => sp.GetRequiredService<IntangibleAssetsRunner>());
+        services.AddSingleton<KnowhowValuationRunner>();
+        services.AddSingleton<IToolRunner, KnowhowValuationRunner>(sp => sp.GetRequiredService<KnowhowValuationRunner>());
 
         services.AddSingleton<IToolRunnerResolver, ToolRunnerResolver>();
         return services;

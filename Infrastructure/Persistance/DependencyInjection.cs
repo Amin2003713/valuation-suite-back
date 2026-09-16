@@ -40,6 +40,14 @@ public static class DependencyInjection
             .AddEntityFrameworkStores<ValuationDbContext>()
             .AddSignInManager();
 
+        // ---- Direct context registration (required by Identity stores & EF tooling) ----
+        services.AddDbContext<ValuationDbContext>(options =>
+            options.UseSqlServer(connectionString, sqlOptions =>
+            {
+                sqlOptions.MigrationsAssembly(typeof(ValuationDbContext).Assembly.FullName);
+                sqlOptions.EnableRetryOnFailure(5, TimeSpan.FromSeconds(10), null);
+            }));
+
         // ---- Write side ----
         services.AddScoped<WriteOnlyDbContext>(provider =>
         {
