@@ -1,6 +1,7 @@
-using Microsoft.AspNetCore.Builder;
-using Microsoft.Extensions.DependencyInjection;
-using Infrastructure;
+using ApiFramework;
+using Persistence;
+using Persistence.Services;
+using RequestHandlers;
 using Swashbuckle.AspNetCore.SwaggerGen;
 using Web.Api.Filters;
 
@@ -12,8 +13,8 @@ public class Program
     {
         var builder = WebApplication.CreateBuilder(args);
 
-        builder.Services.AddControllers();
-        builder.Services.AddEndpointsApiExplorer();
+        builder.Services.AddWebApi(builder.Configuration);
+
         builder.Services.AddSwaggerGen(c =>
         {
             c.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo
@@ -28,8 +29,9 @@ public class Program
             c.CustomSchemaIds(t => t.FullName);
         });
 
-        builder.Services.AddInfrastructure(builder.Configuration);
         builder.Services.AddApplication();
+        builder.Services.AddPersistence(builder.Configuration);
+        builder.Services.AddHandlers();
 
         var app = builder.Build();
 
@@ -46,7 +48,7 @@ public class Program
         }
 
         app.UseHttpsRedirection();
-        app.MapControllers();
+        app.UseWebApi();
 
         app.Run();
     }

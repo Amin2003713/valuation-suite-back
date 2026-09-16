@@ -22,6 +22,8 @@ nuget.config
 
 /nuget.config
 
+**/src_extracted
+
 *.env*
 /src/Web/Api/Sentry
 **/Sentry/
@@ -1126,3 +1128,6 @@ FodyWeavers.xsd
 # JetBrains Rider
 *.sln.iml
 
+*.zip
+
+customer_extracted/**

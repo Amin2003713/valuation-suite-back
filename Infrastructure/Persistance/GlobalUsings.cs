@@ -1,0 +1,29 @@
+// Global using directives
+
+global using System;
+global using System.Collections.Generic;
+global using System.Linq;
+global using System.Linq.Expressions;
+global using System.Reflection;
+global using System.Security.Claims;
+global using System.Threading;
+global using System.Threading.Tasks;
+global using Application.Interfaces;
+global using Application.Interfaces.Base;
+global using Common.Base;
+global using Common.Exceptions;
+global using Common.Utilities.EfCoreHelper;
+global using Domain.Answers;
+global using Domain.Assessments;
+global using Domain.Attempts;
+global using Domain.Companies;
+global using Domain.Results;
+global using Domain.Users;
+global using MediatR;
+global using Microsoft.EntityFrameworkCore;
+global using Microsoft.EntityFrameworkCore.Storage;
+global using Microsoft.Extensions.DependencyInjection;
+global using Microsoft.Extensions.Logging;
+global using Persistence.DbContexts;
+global using Persistence.Repositories.Common;
+global using Persistence.Services.Security;
