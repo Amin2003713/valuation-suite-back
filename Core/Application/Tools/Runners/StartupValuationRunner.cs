@@ -161,6 +161,7 @@ public sealed class StartupValuationRunner : IToolRunner
         public double RevMultipleIndustry { get; set; }
         public double EbitdaMultipleIndustry { get; set; }
         public bool UseBuiltWacc { get; set; }
+
         public double RiskFreeRate { get; set; }
         public double Beta { get; set; }
         public double EquityRiskPremium { get; set; }
@@ -198,7 +199,7 @@ public sealed class StartupValuationRunner : IToolRunner
     // ── Result model ──
     public sealed record WaccInfo(double Built, double Effective);
     public sealed record DcfRow(int T, double Rev, double Ebitda, double Fcf, double Disc, double Pv);
-    public sealed record DcfResult(List<DcfRow> Rows, double Tv, double PvTv, double Value);
+    public sealed record DcfResult(List<DcfRow> Rows, double Tv, [property: JsonPropertyName("pvTV")] double PvTv, double Value);
     public sealed record VcResult(double RevAtExit, double ExitValue, double PostMoney, double Investment, double PreMoney);
     public sealed record MultiplesResult(double RevMultipleValue, double EbitdaBase, double EbitdaMultipleValue, double Value);
     public sealed record CompTransResult(double BaseValue, double Value);

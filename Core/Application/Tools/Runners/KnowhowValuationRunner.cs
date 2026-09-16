@@ -88,13 +88,16 @@ public sealed class KnowhowValuationRunner : IToolRunner
             reproFinal * W("repro") + replFinal * W("repl") + rfrTotal * W("rfr") +
             marketV1 * W("market") + scorecardFinal * W("scorecard") + expected * W("prob");
 
+        var allValues = new[] { reproFinal, replFinal, rfrTotal, marketV1, scorecardFinal, expected };
+        var scenarioValues = scenarioResults.Select(r => r.Value).ToList();
+
         var result = new KnowhowResult(
             reproLabor, reproOverhead, reproDirect, reproDevProfit, reproIncentive, reproGross, reproFunc, reproEcon, reproFinal,
             modernPersonYears, replLabor, replOverhead, replDirect, replDevProfit, replIncentive, replGross, replEcon, replFinal,
             reproFinal - replFinal,
             rfrRows, rfrTotal, rfrAlt,
             marketV1, marketV2, scWeightSum, scCoef, scorecardFinal,
-            probSum, expected, scenarioResults, weightedTotal);
+            probSum, expected, scenarioValues, scenarioResults, allValues, weightedTotal);
         return new ToolRunOutcome(result, null, i.Name);
     }
 
@@ -141,5 +144,9 @@ public sealed class KnowhowValuationRunner : IToolRunner
         double CostDiff,
         List<RfrRow> RfrRows, double RfrTotal, double RfrAlt,
         double MarketV1, double MarketV2, double ScWeightSum, double ScCoef, double ScorecardFinal,
-        double ProbSum, double Expected, List<ScenarioResultRow> ScenarioResults, double WeightedTotal);
+        double ProbSum, double Expected,
+        [property: JsonPropertyName("scenarioValues")] List<double> ScenarioValues,
+        List<ScenarioResultRow> ScenarioResults,
+        [property: JsonPropertyName("allValues")] double[] AllValues,
+        double WeightedTotal);
 }
