@@ -145,3 +145,21 @@ Sandbox mode is on by default → payments use sandbox.zarinpal.com.
 - [ ] Refresh-token / token revocation, rate limiting on auth endpoints.
 - [ ] `docs/IMPLEMENTATION_PLAN.md` Phase 2 items (admin endpoints etc.) — partially done:
       auth + payments now exist; admin companies CRUD still open.
+
+•
+TODOs                                                                                                                                                                                                                            
+✓ Create STATE.md session tracker in project
+(continuity)                                                                                                                                                                       
+✓ Fix build errors (Domain→Common reference,
+CS0400)                                                                                                                                                                            
+✓ User part: migrate to ASP.NET Core IdentityUser + JWT auth
+endpoints                                                                                                                                                          
+✓ Add Zarinpal payment gateway (request/verify + webhook + Plan
+upgrade)                                                                                                                                                        
+✓ Move hardcoded IP-assessment questions to backend seed (with
+scoring/math)                                                                                                                                                    
+☐ Connect frontend to backend APIs (auth client, IpAssessment data
+fetch)                                                                                                                                                       
+☐ Build solution + typecheck frontend, fix
+errors                                                                                                                                                                               
+☐ Update STATE.md with final progress       

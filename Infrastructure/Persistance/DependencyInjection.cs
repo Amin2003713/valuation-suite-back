@@ -1,4 +1,5 @@
 using Common.General;
+using Domain.Payments;
 using Domain.Users;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Configuration;
@@ -88,6 +89,9 @@ public static class DependencyInjection
         services.AddScoped<ICompanyQueryRepository, CompanyQueryRepository>();
         services.AddScoped<IUserCommandRepository, UserCommandRepository>();
         services.AddScoped<IUserQueryRepository, UserQueryRepository>();
+        services.AddScoped<ICommandRepository<Payment>, Repositories.Common.CommandRepository<Payment>>();
+        services.AddScoped<IQueryRepository<Payment>, Repositories.Common.QueryRepository<Payment>>();
+        services.AddScoped<Application.Assessments.Seeding.ISeedingDbContext, DbContexts.SeedingDbContext>();
 
         return services;
     }

@@ -1,3 +1,4 @@
+using Microsoft.OpenApi.Any;
 using Microsoft.OpenApi.Models;
 using Swashbuckle.AspNetCore.SwaggerGen;
 
@@ -11,118 +12,118 @@ public class ExamplesSchemaFilter : ISchemaFilter
 
         var type = context.Type;
 
-        if (type == typeof(Application.Assessments.Commands.CreateAssessmentCommand))
+        if (type == typeof(Application.Assessments.Commands.CreateAssessment.CreateAssessmentCommand))
         {
-            schema.Example = new Microsoft.OpenApi.Any.OpenApiObject
+            schema.Example = new OpenApiObject
             {
-                ["name"] = new Microsoft.OpenApi.Any.OpenApiString("IP Assessment Tool"),
-                ["code"] = new Microsoft.OpenApi.Any.OpenApiString("IP-ASSESS-001"),
-                ["description"] = new Microsoft.OpenApi.Any.OpenApiString("Assessment for IP evaluation"),
-                ["companyId"] = new Microsoft.OpenApi.Any.OpenApiString(Guid.NewGuid().ToString())
+                ["name"] = new OpenApiString("IP Assessment Tool"),
+                ["code"] = new OpenApiString("IP-ASSESS-001"),
+                ["description"] = new OpenApiString("Assessment for IP evaluation"),
+                ["companyId"] = new OpenApiString(Guid.NewGuid().ToString())
             };
         }
-        else if (type == typeof(Application.Assessments.Commands.CreateVersionCommand))
+        else if (type == typeof(Application.Assessments.Commands.CreateVersion.CreateVersionCommand))
         {
-            schema.Example = new Microsoft.OpenApi.Any.OpenApiObject
+            schema.Example = new OpenApiObject
             {
-                ["assessmentId"] = new Microsoft.OpenApi.Any.OpenApiString(Guid.NewGuid().ToString()),
-                ["title"] = new Microsoft.OpenApi.Any.OpenApiString("Draft Version 1")
+                ["assessmentId"] = new OpenApiString(Guid.NewGuid().ToString()),
+                ["title"] = new OpenApiString("Draft Version 1")
             };
         }
-        else if (type == typeof(Application.Assessments.Commands.AddStepCommand))
+        else if (type == typeof(Application.Assessments.Commands.AddStep.AddStepCommand))
         {
-            schema.Example = new Microsoft.OpenApi.Any.OpenApiObject
+            schema.Example = new OpenApiObject
             {
-                ["versionId"] = new Microsoft.OpenApi.Any.OpenApiString(Guid.NewGuid().ToString()),
-                ["title"] = new Microsoft.OpenApi.Any.OpenApiString("Information Gathering"),
-                ["description"] = new Microsoft.OpenApi.Any.OpenApiString("Step 1 description"),
-                ["order"] = new Microsoft.OpenApi.Any.OpenApiInteger(1)
+                ["versionId"] = new OpenApiString(Guid.NewGuid().ToString()),
+                ["title"] = new OpenApiString("Information Gathering"),
+                ["description"] = new OpenApiString("Step 1 description"),
+                ["order"] = new OpenApiInteger(1)
             };
         }
-        else if (type == typeof(Application.Assessments.Commands.AddQuestionCommand))
+        else if (type == typeof(Application.Assessments.Commands.AddQuestion.AddQuestionCommand))
         {
-            schema.Example = new Microsoft.OpenApi.Any.OpenApiObject
+            schema.Example = new OpenApiObject
             {
-                ["stepId"] = new Microsoft.OpenApi.Any.OpenApiString(Guid.NewGuid().ToString()),
-                ["text"] = new Microsoft.OpenApi.Any.OpenApiString("What is your IP?"),
-                ["type"] = new Microsoft.OpenApi.Any.OpenApiString("SingleChoice"),
-                ["order"] = new Microsoft.OpenApi.Any.OpenApiInteger(1),
-                ["isRequired"] = new Microsoft.OpenApi.Any.OpenApiBoolean(true)
+                ["stepId"] = new OpenApiString(Guid.NewGuid().ToString()),
+                ["text"] = new OpenApiString("What is your IP?"),
+                ["type"] = new OpenApiString("SingleChoice"),
+                ["order"] = new OpenApiInteger(1),
+                ["isRequired"] = new OpenApiBoolean(true)
             };
         }
-        else if (type == typeof(Application.Assessments.Commands.SetQuestionOptionsCommand))
+        else if (type == typeof(Application.Assessments.Commands.SetQuestionOptions.SetQuestionOptionsCommand))
         {
-            schema.Example = new Microsoft.OpenApi.Any.OpenApiObject
+            schema.Example = new OpenApiObject
             {
-                ["questionId"] = new Microsoft.OpenApi.Any.OpenApiString(Guid.NewGuid().ToString()),
-                ["options"] = new Microsoft.OpenApi.Any.OpenApiArray
+                ["questionId"] = new OpenApiString(Guid.NewGuid().ToString()),
+                ["options"] = new OpenApiArray
                 {
-                    new Microsoft.OpenApi.Any.OpenApiObject
+                    new OpenApiObject
                     {
-                        ["label"] = new Microsoft.OpenApi.Any.OpenApiString("Yes"),
-                        ["value"] = new Microsoft.OpenApi.Any.OpenApiString("yes"),
-                        ["isCorrect"] = new Microsoft.OpenApi.Any.OpenApiBoolean(true),
-                        ["score"] = new Microsoft.OpenApi.Any.OpenApiFloat(100.0f)
+                        ["label"] = new OpenApiString("Yes"),
+                        ["value"] = new OpenApiString("yes"),
+                        ["isCorrect"] = new OpenApiBoolean(true),
+                        ["score"] = new OpenApiFloat(100.0f)
                     },
-                    new Microsoft.OpenApi.Any.OpenApiObject
+                    new OpenApiObject
                     {
-                        ["label"] = new Microsoft.OpenApi.Any.OpenApiString("No"),
-                        ["value"] = new Microsoft.OpenApi.Any.OpenApiString("no"),
-                        ["isCorrect"] = new Microsoft.OpenApi.Any.OpenApiBoolean(false),
-                        ["score"] = new Microsoft.OpenApi.Any.OpenApiFloat(0.0f)
+                        ["label"] = new OpenApiString("No"),
+                        ["value"] = new OpenApiString("no"),
+                        ["isCorrect"] = new OpenApiBoolean(false),
+                        ["score"] = new OpenApiFloat(0.0f)
                     }
                 }
             };
         }
-        else if (type == typeof(Application.Attempts.Commands.SyncAnswersCommand))
+        else if (type == typeof(Application.Attempts.Commands.SyncAnswers.SyncAnswersCommand))
         {
-            schema.Example = new Microsoft.OpenApi.Any.OpenApiObject
+            schema.Example = new OpenApiObject
             {
-                ["attemptId"] = new Microsoft.OpenApi.Any.OpenApiString(Guid.NewGuid().ToString()),
-                ["answers"] = new Microsoft.OpenApi.Any.OpenApiArray
+                ["attemptId"] = new OpenApiString(Guid.NewGuid().ToString()),
+                ["answers"] = new OpenApiArray
                 {
-                    new Microsoft.OpenApi.Any.OpenApiObject
+                    new OpenApiObject
                     {
-                        ["questionId"] = new Microsoft.OpenApi.Any.OpenApiString(Guid.NewGuid().ToString()),
-                        ["questionKey"] = new Microsoft.OpenApi.Any.OpenApiString("q1"),
-                        ["valueType"] = new Microsoft.OpenApi.Any.OpenApiString("Text"),
-                        ["textValue"] = new Microsoft.OpenApi.Any.OpenApiString("My answer"),
-                        ["numericValue"] = new Microsoft.OpenApi.Any.OpenApiFloat(42.0f),
-                        ["booleanValue"] = new Microsoft.OpenApi.Any.OpenApiBoolean(true),
-                        ["choiceValues"] = new Microsoft.OpenApi.Any.OpenApiArray
+                        ["questionId"] = new OpenApiString(Guid.NewGuid().ToString()),
+                        ["questionKey"] = new OpenApiString("q1"),
+                        ["valueType"] = new OpenApiString("Text"),
+                        ["textValue"] = new OpenApiString("My answer"),
+                        ["numericValue"] = new OpenApiFloat(42.0f),
+                        ["booleanValue"] = new OpenApiBoolean(true),
+                        ["choiceValues"] = new OpenApiArray
                         {
-                            new Microsoft.OpenApi.Any.OpenApiString("yes")
+                            new OpenApiString("yes")
                         },
-                        ["clientRevision"] = new Microsoft.OpenApi.Any.OpenApiInteger(1)
+                        ["clientRevision"] = new OpenApiInteger(1)
                     }
                 },
-                ["clientRevision"] = new Microsoft.OpenApi.Any.OpenApiInteger(1)
+                ["clientRevision"] = new OpenApiInteger(1)
             };
         }
-        else if (type == typeof(Application.Attempts.Commands.CreateAttemptCommand))
+        else if (type == typeof(Application.Attempts.Commands.CreateAttempt.CreateAttemptCommand))
         {
-            schema.Example = new Microsoft.OpenApi.Any.OpenApiObject
+            schema.Example = new OpenApiObject
             {
-                ["versionId"] = new Microsoft.OpenApi.Any.OpenApiString(Guid.NewGuid().ToString()),
-                ["userId"] = new Microsoft.OpenApi.Any.OpenApiString(Guid.NewGuid().ToString()),
-                ["companyId"] = new Microsoft.OpenApi.Any.OpenApiString(Guid.NewGuid().ToString()),
-                ["totalSteps"] = new Microsoft.OpenApi.Any.OpenApiInteger(5)
+                ["versionId"] = new OpenApiString(Guid.NewGuid().ToString()),
+                ["userId"] = new OpenApiString(Guid.NewGuid().ToString()),
+                ["companyId"] = new OpenApiString(Guid.NewGuid().ToString()),
+                ["totalSteps"] = new OpenApiInteger(5)
             };
         }
-        else if (type == typeof(Application.Assessments.Commands.CreateCompanyCommand))
+        else if (type == typeof(Application.Companies.Commands.CreateCompany.CreateCompanyCommand))
         {
-            schema.Example = new Microsoft.OpenApi.Any.OpenApiObject
+            schema.Example = new OpenApiObject
             {
-                ["name"] = new Microsoft.OpenApi.Any.OpenApiString("Acme Corp"),
-                ["slug"] = new Microsoft.OpenApi.Any.OpenApiString("acme-corp"),
-                ["industry"] = new Microsoft.OpenApi.Any.OpenApiString("Technology")
+                ["name"] = new OpenApiString("Acme Corp"),
+                ["slug"] = new OpenApiString("acme-corp"),
+                ["industry"] = new OpenApiString("Technology")
             };
         }
-        else if (type == typeof(Application.Results.Commands.CalculateResultCommand))
+        else if (type == typeof(Application.Results.Commands.CalculateResult.CalculateResultCommand))
         {
-            schema.Example = new Microsoft.OpenApi.Any.OpenApiObject
+            schema.Example = new OpenApiObject
             {
-                ["attemptId"] = new Microsoft.OpenApi.Any.OpenApiString(Guid.NewGuid().ToString())
+                ["attemptId"] = new OpenApiString(Guid.NewGuid().ToString())
             };
         }
     }
