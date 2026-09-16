@@ -13,7 +13,71 @@
 Note: the shell project root here is the **backend** (`src/`). Frontend files are read/written
 via absolute paths `C:/Users/amin/Desktop/valuation-suite/...`.
 
-## Current phase (session 2 — all 13 tools migration)
+## Current phase (session 3 — Admin area)
+
+**User decisions (confirmed):**
+1. **Roles + permissions** (Admin/Support/Analyst with granular permission claims).
+2. **First admin seeded from appsettings** (AdminBootstrap section → AdminSeeder on startup).
+3. **Admin UI in the same Next.js app at `/admin`** (shared API client, role-guarded).
+
+**Admin feature scope:** customers (companies/users) list w/ search+paging, detail view
+(info + payments + tool submissions), modify customer (plan, active, display name),
+payments list, KPI dashboard. Permission-gated per feature.
+
+## Session 3 plan
+
+- [x] Backend: `AdminPermissions.cs` (Roles Admin/Support/Analyst, `Perms` constants,
+      `RolePermissions` map, `PermissionPolicies` — policies named `perm:{permission}`)
+- [x] Backend: `AdminModels.cs` (dashboard/customer/payment/submission records) +
+      `AdminRequests.cs` (MediatR queries/commands)
+- [x] Backend: `IAdminQueryRepository` (Application) → `AdminQueryRepository` (EF, Persistence,
+      projections via `Db.Set<T>()` — DbContext has NO DbSet props, entities auto-discovered)
+- [x] Backend: handlers in `Infrastructure/RequestHandlers/Admin/` — dashboard, customers
+      (paged+search), customer detail (payments + submissions), payments (paged+filter),
+      `UpdateAdminCustomerCommand` (plan via domain methods), `SetAdminRolesCommand`
+- [x] Backend: `AdminBootstrapper` (creates roles; promotes `AdminBootstrap:Emails` from
+      appsettings; register-then-restart for the first admin)
+- [x] Backend: `AdminController` — thin, `[Authorize(Policy="perm:...")]` on every route;
+      roles route requires `Roles="Admin"` too
+- [x] Backend: TokenService stamps `perm:*` claims from roles; Program.cs adds policies +
+      runs bootstrapper; appsettings `AdminBootstrap` section added
+- [x] **Backend builds clean**
+- [x] Frontend: `app/lib/api/admin.ts` (typed API client + JWT claim decoder for roles/perms)
+- [x] Frontend: `/admin` layout — claim-based guard (client-side UX only; backend enforces),
+      sidebar filtered by permissions, nav: dashboard / customers / payments
+- [x] Frontend: `/admin` dashboard (KPIs: customers, revenue, usage; top tools table;
+      recent customers)
+- [x] Frontend: `/admin/customers` — search (debounced), plan/active filters, paging,
+      status/plan badges
+- [x] Frontend: `/admin/customers/[id]` — profile info, edit form (name/plan/expiry/active
+      → `PUT customers/{id}`), role toggles (Admin-only → `PUT customers/{id}/roles`),
+      payments table, tool-submission results (expandable `<details>` with raw JSON)
+- [x] Frontend: `/admin/payments` — status filter, paging
+- [x] Frontend typecheck passes (`npx tsc --noEmit` → 0 errors)
+
+**Session 3 COMPLETE.**
+
+### How to use the admin area
+1. Register a normal account (e.g. `admin@yourdomain.com`) via `/api/auth/register`.
+2. Put the email in `appsettings.json → AdminBootstrap:Emails`.
+3. Restart the API — `AdminBootstrapper` creates roles and promotes that account to Admin.
+4. Log in on the frontend with that account → navigate to `/admin`.
+   (Re-login required for role claims to appear in the JWT.)
+
+### Admin permission model (reference)
+| Role | Permissions |
+|------|-------------|
+| Admin | all (dashboard.view, customers.read, customers.manage, payments.read, submissions.read) |
+| Support | dashboard.view, customers.read, payments.read, submissions.read |
+| Analyst | dashboard.view, submissions.read |
+
+Roles → permissions are stamped as `perm` claims into the JWT at login; endpoints use
+`[Authorize(Policy = "perm:...")]`. Role assignment UI is Admin-only and hides the
+`SetAdminRolesCommand` path behind `Roles="Admin"`.
+
+---
+
+## Previous phase (session 2 — all 13 tools migration) ✅ COMPLETE
 
 **User decisions (confirmed via questions):**
 1. **Calculators → typed per-tool CQRS commands** (one command+handler per calculator, typed
@@ -70,19 +134,75 @@ results via `QuestionEngine` (per-step scores → overall + level).
   zarinpal checkout starter
 - ✅ Backend solution builds clean
 
-## Session 2 progress
+## Session 2 — DESIGN ACTUALLY IMPLEMENTED (differs from the original plan)
+
+The original plan (per-tool CQRS commands + per-tool form endpoints) was **replaced by a
+simpler, uniform design** after implementation began (fewer moving parts, same result):
+
+- **One generic endpoint** instead of 13 typed commands:
+  `POST /api/tools/{toolCode}/run` → `RunToolCommand` → `RunToolCommandHandler` →
+  resolves `IToolRunner` by `ToolCode` → persists a submission → returns
+  `{ submissionId, result }`.
+- **Tool form definitions** live in the `ToolForm` entity
+  (`Core/Domain/Tools/ToolForm.cs`), seeded by `ToolFormsSeeder`
+  (defaults + reference data served to the client).
+- **13 backend runners** (`Core/Application/Tools/Runners/*.cs`) — pure C# ports of the
+  frontend `compute()` engines:
+
+| ToolCode | Source |
+|----------|--------|
+| `IP-ASSESS` | session-1 seeder (`IpAssessmentSeeder`) |
+| `IDEA-ASSESS` | `IdeaAssessmentRunner` |
+| `INNOV-READ` | `InnovationReadinessRunner` |
+| `IP-AUDIT` | `IpAuditRunner` (risk scores per record) |
+| `JOB-EVAL` | `JobEvaluationRunner` |
+| `WIPO-DIAG` | `WipoDiagnosticsRunner` |
+| `IPSCORE` | `IpscoreRunner` (patent-valuation frontend) |
+| `STARTUP-VAL` | `StartupValuationRunner` (9 methods + stage weights) |
+| `BRAND-VAL` | `BrandValuationRunner` |
+| `TRADEMARK-VAL` | `TrademarkValuationRunner` (6 methods + MC) |
+| `PATENT-VAL` | `PatentValuationRunner` (general + pharma share the engine) |
+| `PHARMA-IP` | same `PatentValuationRunner` |
+| `INTANGIBLE` | `IntangibleAssetsRunner` |
+| `KNOWHOW` | `KnowhowValuationRunner` |
+
+- Results are **camelCase-serialized** to match the existing frontend tab types
+  (with explicit `[JsonPropertyName]` for the few non-camelCase names the tabs expect:
+  `Nd1`, `vals`, `mcResults`, `scenarioValues`, `allValues`).
+- **`IToolRunner`** interface in `Core/Application/Tools/IToolRunner.cs`;
+  runners registered via `ToolRunnerRegistration` in Application DI.
+- Shared finance helpers: `Core/Application/Tools/Finance/` (`FinanceMath`, `WeightedRow`).
+- Controller: `Web/Api/Controllers/ToolsController.cs` — thin, MediatR only.
+
+## Session 2 progress — ALL COMPLETE ✅
 
 - [x] Read tool sources: 6 question `data.ts` files + 7 calculator `logic.ts` files
-- [ ] Backend: `ToolSubmission` entity + EF config + DI + DbContext set
-- [ ] Backend: form-definition storage + `GET /api/valuations/{tool}/form`
-- [ ] Backend: seeders for 6 question tools
-- [ ] Backend: 7 typed calculator commands + calculators + handlers
-- [ ] Backend: thin `ValuationsController`
-- [ ] Build backend
-- [ ] Frontend: shared assessment API + wire 6 question tools
-- [ ] Frontend: wire 7 calculators to compute APIs
-- [ ] Frontend typecheck
-- [ ] Final STATE.md update
+- [x] Backend: `ToolForm` entity + EF config + DI + SeedingDbContext + `ToolFormsSeeder`
+- [x] Backend: 13 `IToolRunner` implementations (pure C# math engines)
+- [x] Backend: generic `RunToolCommand` + `GetToolFormQuery` handlers (CQRS, MediatR)
+- [x] Backend: thin `ToolsController` (`GET /api/tools/{code}/form`, `POST /api/tools/{code}/run`)
+- [x] Backend solution builds clean (0 errors)
+- [x] Frontend: `app/lib/api/tools.ts` (`getToolForm`, `runTool`, `ToolRunResponse`)
+- [x] Frontend: `useToolRunner` hook (question tools — step-by-step, answers→backend)
+- [x] Frontend: `useBackendCompute` hook (calculators — debounced live compute on server)
+- [x] Frontend: `AuthContext` wired to real backend API (`register/login/me`)
+- [x] Frontend: 6 question tools rewired (`IDEA-ASSESS`, `INNOV-READ`, `JOB-EVAL`,
+      `WIPO-DIAG`, `IPSCORE`, `IP-ASSESS`)
+- [x] Frontend: 7 calculators rewired (`STARTUP-VAL`, `PATENT-VAL`, `PHARMA-IP`,
+      `BRAND-VAL`, `INTANGIBLE`, `TRADEMARK-VAL`, `KNOWHOW`)
+- [x] Frontend: `ip-audit` rewired to `IP-AUDIT` runner (dashboard KPIs + per-record
+      risk scores + live modal risk preview — all computed server-side)
+- [x] Frontend typecheck passes (`npx tsc --noEmit` → 0 errors)
+- [x] Full solution builds (0 errors), frontend typecheck clean
+
+**Client contract rules (verified per tool):**
+- Frontend pages keep local form state; a `payload`/`S` object merges all state slices
+  and is sent verbatim to the backend runner (case-insensitive binding via `ToolInput.Bind`).
+- Calculators: `const { D, loading, error } = useBackendCompute(code, payload)`;
+  pages render a "در حال محاسبه در سرور…" panel until the first `D` arrives.
+- Question tools: `useToolRunner(code)` — fetches form/questions from backend, posts
+  answers per step, receives scores/results.
+- `patent-search` remains client-side (Lens.org) per user decision.
 
 ## Key backend conventions (do not break)
 
@@ -111,6 +231,8 @@ results via `QuestionEngine` (per-step scores → overall + level).
 ## Remaining / next steps
 
 - [ ] Run EF migrations against real DB and smoke-test auth + payment + seed flow end to end.
+- [ ] Smoke-test each tool page in the browser (backend running + logged in).
+- [ ] Smoke-test the admin area (dashboard/customers/payments) with a seeded admin account.
 - [ ] Zarinpal production merchant + webhook signature validation.
 - [ ] patent-search → backend proxy (deferred per user).
-- [ ] Admin endpoints, refresh tokens, rate limiting.
+- [ ] Refresh tokens, rate limiting.

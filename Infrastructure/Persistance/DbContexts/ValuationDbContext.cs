@@ -22,16 +22,11 @@ public class ValuationDbContext : IdentityDbContext<ApplicationUser, IdentityRol
     /// <summary>Service providing information about the current user, for auditing.</summary>
     private readonly IdentityService? _identityService;
 
-    public ValuationDbContext(
+public ValuationDbContext(
         DbContextOptions<ValuationDbContext> options,
-        IdentityService identityService)
+        IdentityService? identityService = null)
         : base(options)
         => _identityService = identityService;
-
-    public ValuationDbContext(DbContextOptions<ValuationDbContext> options)
-        : base(options)
-    {
-    }
 
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {

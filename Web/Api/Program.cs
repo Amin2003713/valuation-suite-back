@@ -88,7 +88,11 @@ public class Program
                     ClockSkew = TimeSpan.FromMinutes(1),
                 };
             });
-        builder.Services.AddAuthorization();
+        builder.Services.AddAuthorization(options =>
+            Application.Admin.PermissionPolicies.AddPolicies(options));
+
+        // ---- Admin bootstrap (roles + first admin from appsettings) ----
+        builder.Services.AddScoped<Application.Admin.AdminBootstrapper>();
 
         // ---- Zarinpal payment gateway ----
         builder.Services.Configure<ZarinpalOptions>(builder.Configuration.GetSection("Zarinpal"));
@@ -125,6 +129,8 @@ public class Program
                 var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
                 await Application.Tools.Seeding.ToolFormsSeeder.SeedAsync(
                     scope.ServiceProvider.GetRequiredService<Application.Tools.Seeding.IToolFormsDbContext>(), logger);
+
+                await scope.ServiceProvider.GetRequiredService<Application.Admin.AdminBootstrapper>().RunAsync();
             }
             catch (Exception ex)
             {

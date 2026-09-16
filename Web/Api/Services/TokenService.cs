@@ -1,6 +1,7 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using Application.Admin;
 using Domain.Users;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -31,7 +32,14 @@ public class TokenService(IConfiguration configuration, ILogger<TokenService> lo
             claims.Add(new Claim("companyId", companyId.ToString()));
 
         if (roles != null)
+        {
             claims.AddRange(roles.Select(r => new Claim(ClaimTypes.Role, r)));
+
+            // Stamp granular permission claims ("perm:...") from the role map,
+            // so [Authorize(Policy = "perm:...")] works without DB lookups.
+            claims.AddRange(RolePermissions.For(roles)
+                .Select(p => new Claim(PermissionPolicies.ClaimType, p)));
+        }
 
         var token = new JwtSecurityToken(
             issuer: configuration["Jwt:Issuer"],

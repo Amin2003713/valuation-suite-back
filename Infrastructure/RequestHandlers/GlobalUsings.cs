@@ -1,5 +1,6 @@
 global using Application.Common;
 global using Application.Interfaces;
+global using Application.Interfaces.Base;
 global using Application.Assessments;
 global using Application.Assessments.Mappers;
 global using Application.Assessments.Responses;
