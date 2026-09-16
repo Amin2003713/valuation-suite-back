@@ -1,5 +1,8 @@
 using Application.Assessments;
 using Application.Assessments.Seeding;
+using Application.Tools;
+using Application.Tools.Runners;
+using Application.Tools.Seeding;
 using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -20,6 +23,9 @@ public static class DependencyInjection
         services.AddSingleton<IMathEngine, MathEngine>();
 
         services.AddScoped<IpAssessmentSeederRunner>();
+
+        // Tools: math engines (one runner per tool) + resolver
+        services.AddToolRunners();
 
         return services;
     }

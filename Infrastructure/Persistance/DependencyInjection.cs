@@ -91,7 +91,12 @@ public static class DependencyInjection
         services.AddScoped<IUserQueryRepository, UserQueryRepository>();
         services.AddScoped<ICommandRepository<Payment>, Repositories.Common.CommandRepository<Payment>>();
         services.AddScoped<IQueryRepository<Payment>, Repositories.Common.QueryRepository<Payment>>();
+        services.AddScoped<ICommandRepository<Domain.Tools.ToolSubmission>, Repositories.Common.CommandRepository<Domain.Tools.ToolSubmission>>();
+        services.AddScoped<IQueryRepository<Domain.Tools.ToolSubmission>, Repositories.Common.QueryRepository<Domain.Tools.ToolSubmission>>();
+        services.AddScoped<ICommandRepository<Domain.Tools.ToolForm>, Repositories.Common.CommandRepository<Domain.Tools.ToolForm>>();
+        services.AddScoped<IQueryRepository<Domain.Tools.ToolForm>, Repositories.Common.QueryRepository<Domain.Tools.ToolForm>>();
         services.AddScoped<Application.Assessments.Seeding.ISeedingDbContext, DbContexts.SeedingDbContext>();
+        services.AddScoped<Application.Tools.Seeding.IToolFormsDbContext, DbContexts.SeedingDbContext>();
 
         return services;
     }

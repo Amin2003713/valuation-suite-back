@@ -65,6 +65,9 @@ public class Program
         builder.Services.AddPersistence(builder.Configuration);
         builder.Services.AddHandlers();
 
+        // Current-user accessor used by tool handlers (composition root wiring)
+        builder.Services.AddScoped<RequestHandlers.Tools.ICurrentUserAccessor, RequestHandlers.Tools.HttpCurrentUserAccessor>();
+
         // ---- JWT auth ----
         builder.Services.AddScoped<TokenService>();
         builder.Services
@@ -110,17 +113,22 @@ public class Program
         app.UseAuthorization();
         app.UseWebApi();
 
-        // Seed the IP assessment (moved from the frontend's hard-coded questions).
+        // Seed the IP assessment (moved from the frontend's hard-coded questions)
+        // and the tool form definitions (defaults + reference data for the pure-UI client).
         using (var scope = app.Services.CreateScope())
         {
             try
             {
                 await scope.ServiceProvider.GetRequiredService<Application.Assessments.Seeding.IpAssessmentSeederRunner>()
                     .RunAsync();
+
+                var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+                await Application.Tools.Seeding.ToolFormsSeeder.SeedAsync(
+                    scope.ServiceProvider.GetRequiredService<Application.Tools.Seeding.IToolFormsDbContext>(), logger);
             }
             catch (Exception ex)
             {
-                app.Logger.LogError(ex, "IP assessment seeding failed");
+                app.Logger.LogError(ex, "Startup seeding failed");
             }
         }
 

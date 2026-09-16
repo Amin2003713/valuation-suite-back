@@ -7,159 +7,110 @@
 
 | Repo | Path | Stack |
 |------|------|-------|
-| Backend | `C:\Users\amin\Desktop\valuation-suite-back\src` | .NET 10 Clean Architecture (Domain, Application, Persistence, RequestHandlers, ApiFramework, Web.Api), EF Core 9 + SQL Server, MediatR, FluentValidation |
+| Backend | `C:\Users\amin\Desktop\valuation-suite-back\src` | .NET Clean Architecture (Domain, Application, Persistence, RequestHandlers, ApiFramework, Web.Api), EF Core + SQL Server, MediatR, FluentValidation |
 | Frontend | `C:\Users\amin\Desktop\valuation-suite` | Next.js 14 (app router), React 18, Tailwind, TypeScript, RTL Persian UI |
 
 Note: the shell project root here is the **backend** (`src/`). Frontend files are read/written
 via absolute paths `C:/Users/amin/Desktop/valuation-suite/...`.
 
-## Client note (task origin)
+## Current phase (session 2 — all 13 tools migration)
 
-Client said: IP-assessment questions are **hard-coded in the frontend** (`app/lib/ip-assessment/questions.ts`)
-and do **not** need the math engine. Move them to the backend (as seed data with scoring),
-and connect the frontend to the backend APIs.
+**User decisions (confirmed via questions):**
+1. **Calculators → typed per-tool CQRS commands** (one command+handler per calculator, typed
+   DTOs, dedicated domain calculation service per tool; form definitions served from backend
+   so the client is pure UI).
+2. **All 13 tools migrated this session** (question tools + calculators), in dependency order.
+3. **Persist everything** — calculator submissions saved like attempts/results (user history).
+4. **patent-search stays client-side** for now (calls Lens.org directly from browser).
 
-## Task list (from user)
+**Uncle Bob / clean code rules given by user:**
+- Controllers stay **thin** — they only map HTTP → MediatR `Send()` (via `ExecuteAsync`).
+- All logic lives in **RequestHandlers** (application layer) + domain services.
+- Frontend = pure UI: renders questions/results; **backend owns math, scoring, data**.
+- Client fetches questions one-by-one per tool; forms are backend-defined.
 
-1. ✅ Fix build errors
-2. ✅ Optimise the user part → use `IdentityUser` (ASP.NET Core Identity + JWT)
-3. ✅ Add Zarinpal payment gateway (request → sandbox/pay redirect → callback verify → upgrade plan)
-4. ✅ Move hardcoded IP-assessment questions to backend seed (with per-option scores)
-5. ✅ Connect frontend to backend APIs (auth client + IP-assessment fetches + zarinpal checkout)
-6. ✅ Build + verify
+## Tool inventory (13 + auth + payments)
 
-## Completed work
+| # | Tool (route) | Type | Migration strategy |
+|---|--------------|------|--------------------|
+| 1 | ip-assessment | questions | ✅ already seeded as `IP-ASSESS` assessment (session 1) |
+| 2 | idea-assessment | questions | seed as assessment (`IDEA-ASSESS`) |
+| 3 | innovation-readiness | questions | seed as assessment (`INNOV-READ`) |
+| 4 | ip-audit | questions | seed as assessment (`IP-AUDIT`) |
+| 5 | job-evaluation | questions | seed as assessment (`JOB-EVAL`) |
+| 6 | wipo-diagnostics | questions | seed as assessment (`WIPO-DIAG`) |
+| 7 | patent-valuation (IPscore) | questions | seed as assessment (`IPSCORE`) |
+| 8 | startup-valuation | calculator | typed command `RunStartupValuationCommand` |
+| 9 | brand-valuation | calculator | typed command `RunBrandValuationCommand` |
+| 10 | trademark-valuation | calculator | typed command `RunTrademarkValuationCommand` |
+| 11 | general-ip-valuation | calculator | typed command `RunGeneralIpValuationCommand` |
+| 12 | pharma-ip-valuation | calculator | typed command `RunPharmaIpValuationCommand` |
+| 13 | intangible-assets | calculator | typed command `RunIntangibleAssetsCommand` |
+| 14 | knowhow-valuation | calculator | typed command `RunKnowhowValuationCommand` |
 
-### 1. Build errors (fixed)
-- `Core/Domain/Common/BaseEntity.cs` referenced `global::Common.Base.BaseEntity` but Domain.csproj
-  had no reference to `Common`. → Added ProjectReference to `..\..\Common\Common.csproj`.
-- Removed now-redundant EFCore package ref from Domain.csproj (Common already provides it).
+**Question-tool shape:** `data.ts` with `sections[] → questions[] → options[]` + score
+weights + result bands. Seeds map to existing `Assessment/Step/Question/Option` entities;
+results via `QuestionEngine` (per-step scores → overall + level).
 
-### 2. IdentityUser user part (backend)
-- Added packages: `Microsoft.AspNetCore.Identity.EntityFrameworkCore` (9.0.9) to Persistence,
-  `Microsoft.AspNetCore.Authentication.JwtBearer` (10.0.0) + `Microsoft.AspNetCore.Identity.UI`? —
-  (only JwtBearer + Identity.EntityFrameworkCore were needed) to Web.Api.
-- New domain:
-  - `Core/Domain/Users/ApplicationUser.cs` — `ApplicationUser : IdentityUser` with `DisplayName`,
-    `Plan`, `PlanExpiresAt`, `CompanyId`.
-  - `Core/Domain/Users/Plan.cs` — enum Free/Pro (+ helpers `IsPro`, `DisplayName`).
-  - **Legacy `Core/Domain/Users/User.cs` and `Domain.Users.Plan` were removed** (Identity is now
-    the single user model). `UserConfiguration.cs` removed; Identity tables mapped automatically
-    via `builder.Services.AddIdentityCore<ApplicationUser>()...AddEntityFrameworkStores`.
-- `ValuationDbContext` now derives `IdentityDbContext<ApplicationUser>`, sets
-  `AddIdentityCore` in `Persistence/DependencyInjection.cs` (options: require unique email,
-  min password len 6, no lockout in dev).
-- **Auth stack (JWT)**:
-  - `Web/Api/Services/TokenService.cs` — issues JWT (claims: sub=userId, email, name, plan).
-  - `Web/Api/Services/CurrentUser.cs` + extension `GetUserId()` reading `sub`/NameIdentifier.
-  - Controllers: `Web/Api/Controllers/AuthController.cs` (register/login/me endpoints).
-  - DTOs in `Web/Api/Dto/AuthDtos.cs` (RegisterRequest, LoginRequest, AuthResponse, UserDto).
-  - JWT config in `Web/Api/Program.cs` + `appsettings.json` (`Jwt:Issuer,Audience,Key,ExpiryMinutes`).
-  - `[Authorize]` on Attempts/Results controllers; `[AllowAnonymous]` on health/auth.
-- Note: Identity endpoints are **controller-based JWT**, not NextAuth-style cookies; frontend
-  stores the JWT in localStorage.
+**Calculator shape:** `logic.ts` with `INITIAL_*` constants (the **form definition**) +
+`compute()` (the **math engine**). Seeds serve `INITIAL_*` as form definitions via
+`GET /api/valuations/{tool}/form`; `compute()` ported to a per-tool domain calculator
+(`Core/Domain/Valuations/Calculators/*.cs`); results persisted as `ToolSubmission`.
 
-### 3. Zarinpal payment gateway (backend)
-- `Web/Api/Services/ZarinpalService.cs` — `IHttpClientFactory`-based:
-  - `CreateAsync(amountToman, description, callbackUrl, email?, mobile?)` → POST
-    `https://payment.zarinpal.com/pg/v4/payment/request.json` (sandbox host auto-swapped when
-    `Zarinpal:Sandbox=true`), returns `authority`.
-  - `VerifyAsync(amountToman, authority)` → POST `.../verify.json`, returns ok/refId.
-  - DTOs + `ZarinpalOptions` (MerchantId, Sandbox, StartPayUrl).
-- `ZarinpalOptions` bound from `appsettings.json` `Zarinpal` section (MerchantId placeholder,
-  Sandbox=true, TomanAmount=100000 → 10,000 Toman default).
-- Endpoints in `Web/Api/Controllers/PaymentsController.cs`:
-  - `POST /api/payments/zarinpal/start` → creates a `Payment` row (Pending), returns StartPay URL
-    + authority.
-  - `GET  /api/payments/zarinpal/callback` → verifies, upgrades user plan to Pro, marks Payment
-    Paid, redirects to frontend `?payment=success|failed`.
-  - `GET  /api/payments/mine` → payment history (authorized).
-- Domain: `Core/Domain/Payments/Payment.cs` (`PaymentAggregate`), `PaymentStatus`, EF config
-  `PaymentConfiguration.cs`, registered `IPaymentCommandRepository/IPaymentQueryRepository` +
-  implementations. `ValuationDbContext` gains `DbSet<Payment> Payments`.
+## Done in session 1 (details in git history / earlier STATE.md)
 
-### 4. Hardcoded questions → backend seed
-- Frontend source of truth copied verbatim from `app/lib/ip-assessment/questions.ts`:
-  - 10 PRE_QUESTIONS + 6 sections (trademark, confidential, designs, inventive, employment,
-    website) with their DETAILED_QUESTIONS.
-- Backend files:
-  - `Core/Application/Assessments/Seeding/IpAssessmentSeeder.cs` — static definition of the
-    assessment (Code="IP-ASSESS", name FA), steps per section, questions with options and
-    **scores** (index-based `(index+1)*20` to preserve frontend scoring semantics), visibility
-    rules for pre-question branching (product→inventive, materials→confidential, designs→designs,
-    trademark→trademark, website→website, employees→employment).
-  - Seeding is applied on startup: `Web/Api/Program.cs` → `app.SeedIpAssessmentAsync()`
-    (idempotent — checks by Code; skips if exists or version already seeded).
-- Frontend `questions.ts` now just types + re-export note; real data comes from API.
+- ✅ Build errors fixed (Domain→Common reference, CS0400)
+- ✅ IdentityUser migration: `ApplicationUser : IdentityUser`, JWT auth stack
+  (`AuthController`, `TokenService`, JWT config in Program.cs/appsettings)
+- ✅ Zarinpal payment gateway: `ZarinpalService`, `PaymentsController` (start/callback/mine),
+  `Payment` aggregate + EF config
+- ✅ `IpAssessmentSeeder` (IP-ASSESS questions moved to backend, per-option scores,
+  pre-question visibility gating)
+- ✅ Frontend API client (`app/lib/api/client.ts`), auth API (`auth.ts`),
+  zarinpal checkout starter
+- ✅ Backend solution builds clean
 
-### 5. Frontend ↔ backend connection
-- `app/lib/api/client.ts` — fetch wrapper: base URL from `NEXT_PUBLIC_API_URL` (default
-  `http://localhost:5001`), attaches `Authorization: Bearer <jwt>`, JSON handling, `ApiError`.
-- `app/lib/api/auth.ts` — register/login/me/logout against `/api/auth/*`, stores JWT+user in
-  localStorage (`vs_auth_v1`), replaces old mock `store.ts` for auth flows.
-- `app/lib/api/ipAssessment.ts` — `getIpAssessmentForClient()` (published version by code),
-  `getOrCreateAttempt()`, `syncAnswers()`, `completeAttempt()`, `getResult()` — mapped to the
-  shape IpAssessment.tsx already uses (sections/questions/labels kept from API payload).
-- `app/lib/store/AuthContext.tsx` — rewritten to use real API (async login/register, JWT,
-  `ready` gate, `refresh()`); `AuthModal` updated to await login/register and show API errors.
-- `app/lib/store/store.ts` — auth functions removed; kept only session-snapshot helpers
-  (still used by other tools) + `upgradeToPro` now calls zarinpal start endpoint.
-- `app/components/ip-assessment/IpAssessment.tsx` — loads sections/questions from backend on
-  mount (falls back to bundled copy if API down → keeps app usable), sends `syncAnswers` on
-  section completion, and posts `complete` + fetches result to show API-driven result banner.
-- `.env.local.example` added: `NEXT_PUBLIC_API_URL`, `ZARINPAL_MERCHANT_ID` note.
+## Session 2 progress
 
-### 6. Verification
-- `dotnet build valuation-suite.sln` — 0 errors, 0 warnings (except pre-existing NU1603 in tests).
-- Frontend `npx tsc --noEmit` — passes (types only, no runtime run yet).
+- [x] Read tool sources: 6 question `data.ts` files + 7 calculator `logic.ts` files
+- [ ] Backend: `ToolSubmission` entity + EF config + DI + DbContext set
+- [ ] Backend: form-definition storage + `GET /api/valuations/{tool}/form`
+- [ ] Backend: seeders for 6 question tools
+- [ ] Backend: 7 typed calculator commands + calculators + handlers
+- [ ] Backend: thin `ValuationsController`
+- [ ] Build backend
+- [ ] Frontend: shared assessment API + wire 6 question tools
+- [ ] Frontend: wire 7 calculators to compute APIs
+- [ ] Frontend typecheck
+- [ ] Final STATE.md update
 
-## How to run
+## Key backend conventions (do not break)
 
-Backend:
-```bash
-cd /c/Users/amin/Desktop/valuation-suite-back/src
-dotnet run --project Web/Api   # https://localhost:5101 by default (see launchSettings)
-```
-- Update `Web/Api/appsettings.json` → `ConnectionStrings:AssessmentDb` if DB differs.
-- Migrations: `dotnet ef migrations add Init -p Infrastructure/Persistance -s Web/Api`
-  then `dotnet ef database update -p Infrastructure/Persistance -s Web/Api`.
-  (Identity + Payments + Assessment tables all included.)
+- Requests live in `Core/Application/<Area>/Commands|Queries/...`, handlers in
+  `Infrastructure/RequestHandlers/...`; controller `ExecuteAsync` → MediatR.
+- Response DTOs in `Core/Application/.../Responses/` (records); mappers in `Mappers/`.
+- Repos: `ICommandRepository<T>/IQueryRepository<T>` + typed interfaces in
+  `Application/Interfaces/Repositories.cs`; implementations under
+  `Infrastructure/Persistance/Repositories/`.
+- Exceptions: `Common/Exceptions/*` (`ValuationException.NotFound/Conflict/BadRequest`, …).
+- Seeding: `ISeedingDbContext` interface (Application) implemented by `SeedingDbContext`
+  (Persistence); registered in `Infrastructure/Persistance/DependencyInjection.cs`; run from
+  `Program.cs` via `app.SeedIpAssessmentAsync()` pattern.
+- GlobalUsings in each project make common namespaces implicit.
+- `ValuationDbContext : IdentityDbContext<ApplicationUser>`; `AddIdentityCore` in
+  Persistence DI; JWT bearer in Web.Api.
 
-Frontend:
-```bash
-cd /c/Users/amin/Desktop/valuation-suite
-cp .env.local.example .env.local   # set NEXT_PUBLIC_API_URL if backend not on :5101
-npm run dev
-```
+## Key frontend conventions
 
-Zarinpal: set `Zarinpal:MerchantId` in appsettings.json (or env `Zarinpal__MerchantId`).
-Sandbox mode is on by default → payments use sandbox.zarinpal.com.
+- API client: `app/lib/api/client.ts` (`api.get/post/put`, JWT from `vs_auth_v1`).
+- Auth context: `app/lib/store/AuthContext.tsx` (user, isPro, openAuthModal, …).
+- Tools live in `app/<tool>/page.tsx` (+ `logic.ts`, `types.ts`, `tabs/`).
+- Tool access gating: `app/components/auth/AccessGate.tsx` (`tier: free|pro`).
+- Chart components in `app/components/charts/`.
 
-## Remaining / next steps (not started)
+## Remaining / next steps
 
 - [ ] Run EF migrations against real DB and smoke-test auth + payment + seed flow end to end.
-- [ ] Zarinpal production merchant + webhook signature validation (currently callback trusts
-      the verify call only).
-- [ ] Replace remaining tools' hardcoded data (startup-valuation, brand-valuation, …) the same
-      way as IP-assessment when client approves.
-- [ ] Refresh-token / token revocation, rate limiting on auth endpoints.
-- [ ] `docs/IMPLEMENTATION_PLAN.md` Phase 2 items (admin endpoints etc.) — partially done:
-      auth + payments now exist; admin companies CRUD still open.
-
-•
-TODOs                                                                                                                                                                                                                            
-✓ Create STATE.md session tracker in project
-(continuity)                                                                                                                                                                       
-✓ Fix build errors (Domain→Common reference,
-CS0400)                                                                                                                                                                            
-✓ User part: migrate to ASP.NET Core IdentityUser + JWT auth
-endpoints                                                                                                                                                          
-✓ Add Zarinpal payment gateway (request/verify + webhook + Plan
-upgrade)                                                                                                                                                        
-✓ Move hardcoded IP-assessment questions to backend seed (with
-scoring/math)                                                                                                                                                    
-☐ Connect frontend to backend APIs (auth client, IpAssessment data
-fetch)                                                                                                                                                       
-☐ Build solution + typecheck frontend, fix
-errors                                                                                                                                                                               
-☐ Update STATE.md with final progress       
+- [ ] Zarinpal production merchant + webhook signature validation.
+- [ ] patent-search → backend proxy (deferred per user).
+- [ ] Admin endpoints, refresh tokens, rate limiting.
