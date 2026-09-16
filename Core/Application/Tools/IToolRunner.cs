@@ -47,10 +47,17 @@ public static class ToolInput
         NumberHandling = JsonNumberHandling.AllowReadingFromString,
     };
 
+    /// <summary>Client-facing serialization: camelCase to match the frontend result types.</summary>
+    public static JsonSerializerOptions WriteOptions { get; } = new(JsonSerializerDefaults.Web)
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        DictionaryKeyPolicy = JsonNamingPolicy.CamelCase,
+    };
+
     public static T Bind<T>(JsonElement input) where T : class
         => input.Deserialize<T>(ReadOptions)
            ?? throw ValuationException.BadRequest("ورودی ارسال‌شده نامعتبر است.");
 
     public static JsonElement ToJsonElement<T>(T value) where T : class
-        => JsonSerializer.SerializeToElement(value, ReadOptions);
+        => JsonSerializer.SerializeToElement(value, WriteOptions);
 }

@@ -208,7 +208,7 @@ public sealed class PatentValuationRunner : IToolRunner
         }
         Array.Sort(vals);
         double Pctl(double p) => vals[(int)Math.Floor(p * (n - 1))];
-        return new McResult(Pctl(0.10), Pctl(0.50), Pctl(0.90), vals.Average());
+        return new McResult(vals, Pctl(0.10), Pctl(0.50), Pctl(0.90), vals.Average());
     }
 
     // ── Input model ──
@@ -252,16 +252,21 @@ public sealed class PatentValuationRunner : IToolRunner
     public sealed record ScorecardRowResult(string Name, double W, double Score, double Ws);
     public sealed record ScorecardResult(List<ScorecardRowResult> Rows, double PatentQualityScore, double Confidence);
     public sealed record CostResult(double Replacement, double Adjusted);
-    public sealed record BenchmarkResult(string Name, double Low, double Typ, double High, double Rule25, bool Within);
+    public sealed record BenchmarkResult(string Name, double Low, double Typ, double High, double Rule25, bool Within)
+    {
+        /// <summary>Nested royalty row matching the frontend's benchmark.row shape.</summary>
+        [property: JsonPropertyName("row")]
+        public object Row => new { name = Name, low = Low, typ = Typ, high = High };
+    }
     public sealed record PcsResult(double Base, double Low, double High);
     public sealed record WaccResult(double SpecificRiskPremium, double LegalRiskAdj, double Dynamic, double MarketOnly);
     public sealed record DcfRow(int Y, double Rev, double Fcf, double Pv);
     public sealed record DcfResult(List<DcfRow> Rows, double Npv, double PvTerminal, double DcfValue);
     public sealed record RfrRow(int Y, double RoyaltyTyp, double Pv);
     public sealed record RfrResult(List<RfrRow> Rows, double Base, double Low, double High);
-    public sealed record BsResult(double D1, double D2, double Nd1, double Nd2, double Value);
+    public sealed record BsResult(double D1, double D2, [property: JsonPropertyName("Nd1")] double Nd1, [property: JsonPropertyName("Nd2")] double Nd2, double Value);
     public sealed record BinomialResult(double U, double D, double P, double Disc, double Value);
-    public sealed record McResult(double P10, double P50, double P90, double Mean);
+    public sealed record McResult([property: JsonPropertyName("vals")] double[] Vals, double P10, double P50, double P90, double Mean);
     public sealed record PatentResult(
         ScorecardResult Scorecard, CostResult Cost, BenchmarkResult Benchmark, PcsResult Pcs, WaccResult Wacc,
         DcfResult Dcf, RfrResult Rfr, BsResult Bs, BinomialResult Binomial, McResult Mc, double FairValue);
