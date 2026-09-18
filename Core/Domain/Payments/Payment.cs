@@ -15,6 +15,18 @@ public sealed class Payment : BaseEntity
     public string? ErrorMessage { get; set; }
     public DateTime? PaidAt { get; set; }
 
+    /// <summary>What this payment buys when verified.</summary>
+    public PaymentKind Kind { get; set; } = PaymentKind.ProPlan;
+
+    /// <summary>Tool code for Kind=ToolAdvanced, null otherwise.</summary>
+    public string? ToolCode { get; set; }
+
+    /// <summary>Package id for Kind=Package, null otherwise.</summary>
+    public Guid? PackageId { get; set; }
+
+    /// <summary>Submission id for Kind=Advice, null otherwise.</summary>
+    public Guid? SubmissionId { get; set; }
+
     public static Payment Create(Guid userId, long amount, string description) => new()
     {
         UserId = userId,
@@ -49,4 +61,17 @@ public enum PaymentStatus
     Paid = 3,
     Failed = 4,
     Cancelled = 5,
+}
+
+/// <summary>What a payment purchases. The callback grants entitlements by kind.</summary>
+public enum PaymentKind
+{
+    /// <summary>Pro subscription (existing behaviour).</summary>
+    ProPlan = 1,
+    /// <summary>Unlock one tool's advanced results.</summary>
+    ToolAdvanced = 2,
+    /// <summary>A bundle of tool unlocks (fixed list and/or pick-N credits).</summary>
+    Package = 3,
+    /// <summary>Paid adviser review of one tool submission.</summary>
+    Advice = 4,
 }

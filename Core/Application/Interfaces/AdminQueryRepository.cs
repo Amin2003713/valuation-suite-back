@@ -28,6 +28,21 @@ public interface IAdminQueryRepository
     // ── Submissions (tool results) ──
     Task<List<AdminSubmissionRow>> GetSubmissionsAsync(Guid userId, int take, CancellationToken ct = default);
 
+    /// <summary>Paged, global submissions explorer (all users) with optional filters.</summary>
+    Task<(List<AdminSubmissionRow> Items, int TotalCount)> SearchSubmissionsAsync(
+        int page, int pageSize, string? toolCode, string? search, Guid? userId, CancellationToken ct = default);
+
     // ── Reference data ──
+    Task<List<AdminToolRow>> GetToolsAsync(CancellationToken ct = default);
     Task<List<ToolUsageRow>> GetTopToolsAsync(int take, CancellationToken ct = default);
+
+    // ── Companies ──
+    Task<(List<AdminCompanyRow> Items, int TotalCount)> GetCompaniesAsync(
+        int page, int pageSize, string? search, CancellationToken ct = default);
+
+    // ── Session 5: analytics, grants, adviser queue ──
+
+    Task<AdminAnalyticsResponse> GetAnalyticsAsync(CancellationToken ct = default);
+    Task<List<AdminGrantRow>> GetGrantsAsync(Guid? userId, CancellationToken ct = default);
+    Task<List<AdminSubmissionRow>> GetAdviserQueueAsync(CancellationToken ct = default);
 }

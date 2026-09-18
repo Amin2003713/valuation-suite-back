@@ -59,8 +59,6 @@ public ValuationDbContext(
         modelBuilder.AddPluralizingTableNameConvention();
         modelBuilder.AddDecimalConvention();
         modelBuilder.AddGlobalIsActiveFilter();
-
-        base.OnModelCreating(modelBuilder);
     }
 
     /// <summary>Applies auditing and soft-delete rules to all tracked IEntity instances.</summary>

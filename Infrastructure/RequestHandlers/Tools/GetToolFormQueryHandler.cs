@@ -21,7 +21,8 @@ public sealed class GetToolFormQueryHandler(IQueryRepository<ToolForm> forms)
 
         return new ToolFormResponse(
             form.ToolCode, form.Title, form.Description,
-            form.Kind.ToString(), JsonSerializer.Deserialize<JsonElement>(form.SchemaJson));
+            form.Kind.ToString(), JsonSerializer.Deserialize<JsonElement>(form.SchemaJson),
+            form.Route, form.AdvancedPriceToman, form.AdvicePriceToman);
     }
 }
 
@@ -32,7 +33,9 @@ public sealed class GetToolFormsQueryHandler(IQueryRepository<ToolForm> forms)
     {
         var list = await forms.TableNoTracking
             .OrderBy(t => t.SortOrder)
-            .Select(t => new ToolFormSummary(t.ToolCode, t.Title, t.Description, t.Kind.ToString(), t.SortOrder))
+            .Select(t => new ToolFormSummary(
+                t.ToolCode, t.Title, t.Description, t.Kind.ToString(), t.SortOrder,
+                t.Route, t.AdvancedPriceToman, t.AdvicePriceToman))
             .ToListAsync(ct);
         return list;
     }

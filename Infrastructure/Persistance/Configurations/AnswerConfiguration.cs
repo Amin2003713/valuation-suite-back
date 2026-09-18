@@ -19,7 +19,7 @@ public class AnswerConfiguration : IEntityTypeConfiguration<Answer>
         builder.HasIndex(a => a.AttemptId).IsUnique();
         builder.HasIndex(a => a.SynchronizedAt);
 
-        builder.HasOne<AssessmentAttempt>()
+        builder.HasOne(a => a.Attempt)
             .WithMany(a => a.Answers)
             .HasForeignKey("AttemptId")
             .OnDelete(DeleteBehavior.Cascade);

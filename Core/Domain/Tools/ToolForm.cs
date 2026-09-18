@@ -25,8 +25,24 @@ public sealed class ToolForm : BaseEntity
     public string SchemaJson { get; set; } = "{}";
     public int SortOrder { get; set; }
 
-    public static ToolForm Create(string code, string title, string? description, ToolKind kind, string schemaJson, int sortOrder) =>
-        new() { ToolCode = code, Title = title, Description = description, Kind = kind, SchemaJson = schemaJson, SortOrder = sortOrder };
+    /// <summary>Toman price to unlock the tool's *advanced* result sections. 0 = free advanced.</summary>
+    public long AdvancedPriceToman { get; set; }
+
+    /// <summary>Frontend route of the tool ("idea-assessment", "brand-valuation", ...).</summary>
+    public string Route { get; set; } = string.Empty;
+
+    /// <summary>Toman price for one paid adviser review of a submission of this tool. 0 = advice not offered.</summary>
+    public long AdvicePriceToman { get; set; }
+
+    public static ToolForm Create(
+        string code, string title, string? description, ToolKind kind, string schemaJson,
+        int sortOrder, long advancedPriceToman = 0, string route = "", long advicePriceToman = 0) =>
+        new()
+        {
+            ToolCode = code, Title = title, Description = description, Kind = kind,
+            SchemaJson = schemaJson, SortOrder = sortOrder,
+            AdvancedPriceToman = advancedPriceToman, Route = route, AdvicePriceToman = advicePriceToman,
+        };
 }
 
 /// <summary>

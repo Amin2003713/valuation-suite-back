@@ -4,6 +4,7 @@ using Domain.Users;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using System.Text.RegularExpressions;
 using Web.Api.Dto;
 using Web.Api.Services;
 
@@ -41,9 +42,20 @@ public class AuthController(
         }
 
         await userManager.UpdateAsync(user);
-        var (token, expiresAt) = tokenService.CreateToken(user);
 
-        return Ok(new AuthResponse(user.Id, user.DisplayName, user.Email!, user.Plan.ToString(), token, expiresAt));
+        // Optional company registration at sign-up (users register their company too).
+        if (!string.IsNullOrWhiteSpace(request.CompanyName))
+        {
+            var slug = Slugify(request.CompanyName);
+            var company = Domain.Companies.Company.Create(request.CompanyName.Trim(), slug);
+            user.Company = company;
+            await userManager.UpdateAsync(user);
+        }
+
+        var roles = await userManager.GetRolesAsync(user);
+        var (token, expiresAt) = tokenService.CreateToken(user, roles);
+
+        return Ok(BuildAuthResponse(user, roles, token, expiresAt));
     }
 
     [HttpPost("login")]
@@ -66,7 +78,7 @@ public class AuthController(
         var roles = await userManager.GetRolesAsync(user);
         var (token, expiresAt) = tokenService.CreateToken(user, roles);
 
-        return Ok(new AuthResponse(user.Id, user.DisplayName, user.Email!, user.Plan.ToString(), token, expiresAt));
+        return Ok(BuildAuthResponse(user, roles, token, expiresAt));
     }
 
     [HttpGet("me")]
@@ -80,8 +92,43 @@ public class AuthController(
         var user = await userManager.FindByIdAsync(userId.ToString())
             ?? throw new NotFoundException("کاربر یافت نشد");
 
+        var roles = await userManager.GetRolesAsync(user);
+
         return Ok(new UserDto(
-            user.Id, user.DisplayName, user.Email ?? string.Empty,
-            user.Plan.ToString(), user.IsPro, user.CompanyId));
+            user.Id,
+            user.DisplayName,
+            user.Email ?? string.Empty,
+            user.Plan.ToString(),
+            user.IsPro,
+            user.CompanyId,
+            user.Company != null ? user.Company.Name : null,
+            roles.ToList()));
+    }
+
+    private AuthResponse BuildAuthResponse(ApplicationUser user, IList<string> roles, string token, DateTime expiresAt)
+    {
+        return new AuthResponse(
+            user.Id,
+            user.DisplayName,
+            user.Email ?? string.Empty,
+            user.Plan.ToString(),
+            user.IsPro,
+            user.CompanyId,
+            user.Company != null ? user.Company.Name : null,
+            roles.ToList(),
+            user.Company != null ? user.Company.Slug : null,
+            user.Company != null ? user.Company.LogoUrl : null,
+            user.Company != null ? user.Company.Industry : null,
+            token,
+            expiresAt);
+    }
+
+    private static string Slugify(string name)
+    {
+        var normalized = name.Trim().ToLowerInvariant();
+        var slug = Regex.Replace(normalized, @"[^a-z0-9\u0600-\u06FF]+", "-").Trim('-');
+        if (string.IsNullOrEmpty(slug))
+            slug = $"co-{Guid.NewGuid().ToString("N")[..8]}";
+        return $"{slug}-{Guid.NewGuid().ToString("N")[..6]}";
     }
 }

@@ -9,8 +9,10 @@ public static class AdminRoles
     public const string Admin = "Admin";
     public const string Support = "Support";
     public const string Analyst = "Analyst";
+    /// <summary>Adviser (new-test admin): writes text/voice guidance notes on customer results.</summary>
+    public const string Adviser = "Adviser";
 
-    public static readonly string[] All = [Admin, Support, Analyst];
+    public static readonly string[] All = [Admin, Support, Analyst, Adviser];
 }
 
 /// <summary>
@@ -23,10 +25,15 @@ public static class Perms
     public const string CustomersManage = "customers.manage";
     public const string PaymentsRead = "payments.read";
     public const string SubmissionsRead = "submissions.read";
+    /// <summary>Write adviser notes (text/voice) on customer submissions.</summary>
+    public const string NotesWrite = "notes.write";
+    /// <summary>Grant/revoke tool access and manage packages.</summary>
+    public const string AccessManage = "access.manage";
 
     public static readonly string[] All =
     [
-        DashboardView, CustomersRead, CustomersManage, PaymentsRead, SubmissionsRead
+        DashboardView, CustomersRead, CustomersManage, PaymentsRead, SubmissionsRead,
+        NotesWrite, AccessManage
     ];
 }
 
@@ -41,6 +48,7 @@ public static class RolePermissions
             Perms.DashboardView, Perms.CustomersRead, Perms.PaymentsRead, Perms.SubmissionsRead
         ],
         [AdminRoles.Analyst] = [Perms.DashboardView, Perms.SubmissionsRead],
+        [AdminRoles.Adviser] = [Perms.SubmissionsRead, Perms.NotesWrite],
     };
 
     public static IReadOnlyList<string> For(IEnumerable<string> roles)

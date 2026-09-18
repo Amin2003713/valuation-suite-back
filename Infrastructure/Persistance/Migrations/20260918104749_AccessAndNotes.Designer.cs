@@ -12,8 +12,8 @@ using Persistence.DbContexts;
 namespace Persistence.Migrations
 {
     [DbContext(typeof(ValuationDbContext))]
-    [Migration("20260916194536_InitialCreate")]
-    partial class InitialCreate
+    [Migration("20260918104749_AccessAndNotes")]
+    partial class AccessAndNotes
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -32,9 +32,6 @@ namespace Persistence.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<Guid>("AttemptId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid>("AttemptId1")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<bool?>("BooleanValue")
@@ -98,8 +95,6 @@ namespace Persistence.Migrations
 
                     b.HasIndex("AttemptId")
                         .IsUnique();
-
-                    b.HasIndex("AttemptId1");
 
                     b.HasIndex("SynchronizedAt");
 
@@ -191,9 +186,6 @@ namespace Persistence.Migrations
                     b.Property<Guid>("AssessmentId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<Guid>("AssessmentId1")
-                        .HasColumnType("uniqueidentifier");
-
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
@@ -237,8 +229,6 @@ namespace Persistence.Migrations
                         .HasColumnType("int");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("AssessmentId1");
 
                     b.HasIndex("IsDraft");
 
@@ -294,9 +284,6 @@ namespace Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<string>("CalculationOutputKey")
-                        .HasColumnType("nvarchar(200)");
-
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
@@ -325,9 +312,6 @@ namespace Persistence.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
-                    b.Property<string>("MathExpressionExpression")
-                        .HasColumnType("nvarchar(1000)");
-
                     b.Property<DateTime?>("ModifiedAt")
                         .HasColumnType("datetime2");
 
@@ -338,9 +322,6 @@ namespace Persistence.Migrations
                         .HasColumnType("int");
 
                     b.Property<Guid>("StepId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid>("StepId1")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("Text")
@@ -355,15 +336,9 @@ namespace Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("CalculationOutputKey");
-
                     b.HasIndex("Key");
 
-                    b.HasIndex("MathExpressionExpression");
-
                     b.HasIndex("StepId");
-
-                    b.HasIndex("StepId1");
 
                     b.HasIndex("Type");
 
@@ -412,12 +387,7 @@ namespace Persistence.Migrations
                     b.Property<Guid>("VersionId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<Guid>("VersionId1")
-                        .HasColumnType("uniqueidentifier");
-
                     b.HasKey("Id");
-
-                    b.HasIndex("VersionId1");
 
                     b.HasIndex("VersionId", "Order")
                         .IsUnique();
@@ -487,9 +457,6 @@ namespace Persistence.Migrations
                     b.Property<Guid>("VersionId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<Guid>("VersionId1")
-                        .HasColumnType("uniqueidentifier");
-
                     b.HasKey("Id");
 
                     b.HasIndex("Status");
@@ -498,179 +465,9 @@ namespace Persistence.Migrations
 
                     b.HasIndex("VersionId");
 
-                    b.HasIndex("VersionId1");
-
                     b.HasIndex("UserId", "VersionId");
 
                     b.ToTable("AssessmentAttempts");
-                });
-
-            modelBuilder.Entity("Domain.Common.CalculationConfig", b =>
-                {
-                    b.Property<string>("OutputKey")
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<string>("Expression")
-                        .IsRequired()
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
-
-                    b.Property<string>("Formula")
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
-
-                    b.PrimitiveCollection<string>("InputQuestionIds")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("ResultLabel")
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.HasKey("OutputKey");
-
-                    b.ToTable("CalculationConfigs");
-                });
-
-            modelBuilder.Entity("Domain.Common.MathExpression", b =>
-                {
-                    b.Property<string>("Expression")
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
-
-                    b.Property<string>("PostfixNotation")
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
-
-                    b.HasKey("Expression");
-
-                    b.ToTable("MathExpressions");
-                });
-
-            modelBuilder.Entity("Domain.Common.MathOperation", b =>
-                {
-                    b.Property<int>("Type")
-                        .HasColumnType("int");
-
-                    b.Property<double?>("Constant")
-                        .HasColumnType("float");
-
-                    b.Property<string>("MathExpressionId")
-                        .HasColumnType("nvarchar(1000)");
-
-                    b.Property<string>("Operand")
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.HasKey("Type");
-
-                    b.HasIndex("MathExpressionId");
-
-                    b.ToTable("MathOperations");
-                });
-
-            modelBuilder.Entity("Domain.Common.MathVariable", b =>
-                {
-                    b.Property<string>("Name")
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<double>("DefaultValue")
-                        .HasColumnType("float");
-
-                    b.Property<bool>("IsRequired")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bit")
-                        .HasDefaultValue(true);
-
-                    b.Property<string>("Label")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<string>("MathExpressionId")
-                        .HasColumnType("nvarchar(1000)");
-
-                    b.Property<double>("MaxValue")
-                        .HasColumnType("float");
-
-                    b.Property<double>("MinValue")
-                        .HasColumnType("float");
-
-                    b.HasKey("Name");
-
-                    b.HasIndex("MathExpressionId");
-
-                    b.ToTable("MathVariables");
-                });
-
-            modelBuilder.Entity("Domain.Common.ValidationRule", b =>
-                {
-                    b.Property<string>("Field")
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<string>("ErrorMessage")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<int?>("MaxLength")
-                        .HasColumnType("int");
-
-                    b.Property<double?>("MaxValue")
-                        .HasColumnType("float");
-
-                    b.Property<int?>("MinLength")
-                        .HasColumnType("int");
-
-                    b.Property<double?>("MinValue")
-                        .HasColumnType("float");
-
-                    b.Property<string>("Pattern")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<Guid?>("QuestionId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<int>("Type")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasDefaultValue(1);
-
-                    b.HasKey("Field");
-
-                    b.HasIndex("QuestionId");
-
-                    b.HasIndex("Field", "Type")
-                        .IsUnique();
-
-                    b.ToTable("ValidationRules");
-                });
-
-            modelBuilder.Entity("Domain.Common.VisibilityCondition", b =>
-                {
-                    b.Property<string>("TargetQuestionId")
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<Guid?>("QuestionId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<int>("Type")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasDefaultValue(1);
-
-                    b.Property<string>("Value")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.HasKey("TargetQuestionId");
-
-                    b.HasIndex("QuestionId");
-
-                    b.ToTable("VisibilityConditions");
                 });
 
             modelBuilder.Entity("Domain.Companies.Company", b =>
@@ -777,10 +574,16 @@ namespace Persistence.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
+                    b.Property<int>("Kind")
+                        .HasColumnType("int");
+
                     b.Property<DateTime?>("ModifiedAt")
                         .HasColumnType("datetime2");
 
                     b.Property<Guid?>("ModifiedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("PackageId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<DateTime?>("PaidAt")
@@ -794,6 +597,12 @@ namespace Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int")
                         .HasDefaultValue(1);
+
+                    b.Property<Guid?>("SubmissionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ToolCode")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<Guid>("UserId")
                         .HasColumnType("uniqueidentifier");
@@ -819,9 +628,6 @@ namespace Persistence.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<Guid>("AttemptId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid>("AttemptId1")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<DateTime>("CalculatedAt")
@@ -873,11 +679,69 @@ namespace Persistence.Migrations
                     b.HasIndex("AttemptId")
                         .IsUnique();
 
-                    b.HasIndex("AttemptId1");
-
                     b.HasIndex("IsCalculated");
 
                     b.ToTable("AssessmentResults");
+                });
+
+            modelBuilder.Entity("Domain.Tools.SubmissionNote", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("AdviserUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("AudioBase64")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("AudioMimeType")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int?>("AudioSeconds")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("DeletedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("ModifiedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("ModifiedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("SeenAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("SeenByCustomer")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid>("SubmissionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Text")
+                        .HasMaxLength(20000)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SubmissionId");
+
+                    b.ToTable("SubmissionNotes");
                 });
 
             modelBuilder.Entity("Domain.Tools.ToolForm", b =>
@@ -885,6 +749,12 @@ namespace Persistence.Migrations
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<long>("AdvancedPriceToman")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("AdvicePriceToman")
+                        .HasColumnType("bigint");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
@@ -913,6 +783,11 @@ namespace Persistence.Migrations
 
                     b.Property<Guid?>("ModifiedBy")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Route")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<string>("SchemaJson")
                         .IsRequired()
@@ -996,6 +871,63 @@ namespace Persistence.Migrations
                     b.HasIndex("UserId", "ToolCode");
 
                     b.ToTable("ToolSubmissions");
+                });
+
+            modelBuilder.Entity("Domain.Users.AccessPackage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("DeletedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<int?>("DurationDays")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("ModifiedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("ModifiedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int?>("PickCount")
+                        .HasColumnType("int");
+
+                    b.Property<long>("PriceToman")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ToolCodesJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("AccessPackages");
                 });
 
             modelBuilder.Entity("Domain.Users.ApplicationUser", b =>
@@ -1106,6 +1038,57 @@ namespace Persistence.Migrations
                     b.HasIndex("Plan");
 
                     b.ToTable("AspNetUsers", (string)null);
+                });
+
+            modelBuilder.Entity("Domain.Users.UserToolAccess", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("DeletedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("ExpiresAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("GrantedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("ModifiedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("ModifiedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("PaymentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ToolCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "ToolCode");
+
+                    b.ToTable("UserToolAccesses");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole<System.Guid>", b =>
@@ -1241,15 +1224,9 @@ namespace Persistence.Migrations
 
             modelBuilder.Entity("Domain.Answers.Answer", b =>
                 {
-                    b.HasOne("Domain.Attempts.AssessmentAttempt", null)
+                    b.HasOne("Domain.Attempts.AssessmentAttempt", "Attempt")
                         .WithMany("Answers")
                         .HasForeignKey("AttemptId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("Domain.Attempts.AssessmentAttempt", "Attempt")
-                        .WithMany()
-                        .HasForeignKey("AttemptId1")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
@@ -1267,15 +1244,9 @@ namespace Persistence.Migrations
 
             modelBuilder.Entity("Domain.Assessments.AssessmentVersion", b =>
                 {
-                    b.HasOne("Domain.Assessments.Assessment", null)
+                    b.HasOne("Domain.Assessments.Assessment", "Assessment")
                         .WithMany("Versions")
                         .HasForeignKey("AssessmentId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("Domain.Assessments.Assessment", "Assessment")
-                        .WithMany()
-                        .HasForeignKey("AssessmentId1")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
@@ -1292,44 +1263,244 @@ namespace Persistence.Migrations
 
             modelBuilder.Entity("Domain.Assessments.Question", b =>
                 {
-                    b.HasOne("Domain.Common.CalculationConfig", "Calculation")
-                        .WithMany()
-                        .HasForeignKey("CalculationOutputKey");
-
-                    b.HasOne("Domain.Common.MathExpression", "MathExpression")
-                        .WithMany()
-                        .HasForeignKey("MathExpressionExpression");
-
-                    b.HasOne("Domain.Assessments.Step", null)
+                    b.HasOne("Domain.Assessments.Step", "Step")
                         .WithMany("Questions")
                         .HasForeignKey("StepId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("Domain.Assessments.Step", "Step")
-                        .WithMany()
-                        .HasForeignKey("StepId1")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                    b.OwnsOne("Domain.Common.CalculationConfig", "Calculation", b1 =>
+                        {
+                            b1.Property<Guid>("QuestionId")
+                                .HasColumnType("uniqueidentifier");
+
+                            b1.Property<string>("Expression")
+                                .IsRequired()
+                                .HasMaxLength(1000)
+                                .HasColumnType("nvarchar(1000)");
+
+                            b1.Property<string>("Formula")
+                                .HasColumnType("nvarchar(max)");
+
+                            b1.Property<string>("InputQuestionIds")
+                                .IsRequired()
+                                .HasColumnType("nvarchar(max)");
+
+                            b1.Property<string>("OutputKey")
+                                .IsRequired()
+                                .HasMaxLength(200)
+                                .HasColumnType("nvarchar(200)");
+
+                            b1.Property<string>("ResultLabel")
+                                .HasMaxLength(200)
+                                .HasColumnType("nvarchar(200)");
+
+                            b1.Property<string>("Weights")
+                                .IsRequired()
+                                .HasColumnType("nvarchar(max)");
+
+                            b1.HasKey("QuestionId");
+
+                            b1.ToTable("Questions");
+
+                            b1.WithOwner()
+                                .HasForeignKey("QuestionId");
+                        });
+
+                    b.OwnsOne("Domain.Common.MathExpression", "MathExpression", b1 =>
+                        {
+                            b1.Property<Guid>("QuestionId")
+                                .HasColumnType("uniqueidentifier");
+
+                            b1.Property<string>("Expression")
+                                .IsRequired()
+                                .HasMaxLength(1000)
+                                .HasColumnType("nvarchar(1000)");
+
+                            b1.Property<string>("PostfixNotation")
+                                .HasMaxLength(1000)
+                                .HasColumnType("nvarchar(1000)");
+
+                            b1.HasKey("QuestionId");
+
+                            b1.ToTable("Questions");
+
+                            b1.WithOwner()
+                                .HasForeignKey("QuestionId");
+
+                            b1.OwnsMany("Domain.Common.MathOperation", "Operations", b2 =>
+                                {
+                                    b2.Property<Guid>("MathExpressionQuestionId")
+                                        .HasColumnType("uniqueidentifier");
+
+                                    b2.Property<int>("Id")
+                                        .ValueGeneratedOnAdd()
+                                        .HasColumnType("int");
+
+                                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b2.Property<int>("Id"));
+
+                                    b2.Property<double?>("Constant")
+                                        .HasColumnType("float");
+
+                                    b2.Property<string>("Operand")
+                                        .HasMaxLength(100)
+                                        .HasColumnType("nvarchar(100)");
+
+                                    b2.Property<int>("Type")
+                                        .HasColumnType("int");
+
+                                    b2.HasKey("MathExpressionQuestionId", "Id");
+
+                                    b2.ToTable("MathOperations");
+
+                                    b2.WithOwner()
+                                        .HasForeignKey("MathExpressionQuestionId");
+                                });
+
+                            b1.OwnsMany("Domain.Common.MathVariable", "Variables", b2 =>
+                                {
+                                    b2.Property<Guid>("MathExpressionQuestionId")
+                                        .HasColumnType("uniqueidentifier");
+
+                                    b2.Property<int>("Id")
+                                        .ValueGeneratedOnAdd()
+                                        .HasColumnType("int");
+
+                                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b2.Property<int>("Id"));
+
+                                    b2.Property<double>("DefaultValue")
+                                        .HasColumnType("float");
+
+                                    b2.Property<bool>("IsRequired")
+                                        .HasColumnType("bit");
+
+                                    b2.Property<string>("Label")
+                                        .IsRequired()
+                                        .HasMaxLength(200)
+                                        .HasColumnType("nvarchar(200)");
+
+                                    b2.Property<double>("MaxValue")
+                                        .HasColumnType("float");
+
+                                    b2.Property<double>("MinValue")
+                                        .HasColumnType("float");
+
+                                    b2.Property<string>("Name")
+                                        .IsRequired()
+                                        .HasMaxLength(100)
+                                        .HasColumnType("nvarchar(100)");
+
+                                    b2.HasKey("MathExpressionQuestionId", "Id");
+
+                                    b2.ToTable("MathVariables");
+
+                                    b2.WithOwner()
+                                        .HasForeignKey("MathExpressionQuestionId");
+                                });
+
+                            b1.Navigation("Operations");
+
+                            b1.Navigation("Variables");
+                        });
+
+                    b.OwnsMany("Domain.Common.ValidationRule", "Validations", b1 =>
+                        {
+                            b1.Property<Guid>("QuestionId")
+                                .HasColumnType("uniqueidentifier");
+
+                            b1.Property<int>("Id")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("int");
+
+                            SqlServerPropertyBuilderExtensions.UseIdentityColumn(b1.Property<int>("Id"));
+
+                            b1.Property<string>("ErrorMessage")
+                                .HasMaxLength(500)
+                                .HasColumnType("nvarchar(500)");
+
+                            b1.Property<string>("Field")
+                                .IsRequired()
+                                .HasMaxLength(200)
+                                .HasColumnType("nvarchar(200)");
+
+                            b1.Property<int?>("MaxLength")
+                                .HasColumnType("int");
+
+                            b1.Property<double?>("MaxValue")
+                                .HasColumnType("float");
+
+                            b1.Property<int?>("MinLength")
+                                .HasColumnType("int");
+
+                            b1.Property<double?>("MinValue")
+                                .HasColumnType("float");
+
+                            b1.Property<string>("Pattern")
+                                .HasMaxLength(500)
+                                .HasColumnType("nvarchar(500)");
+
+                            b1.Property<int>("Type")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("int")
+                                .HasDefaultValue(1);
+
+                            b1.HasKey("QuestionId", "Id");
+
+                            b1.ToTable("ValidationRules");
+
+                            b1.WithOwner()
+                                .HasForeignKey("QuestionId");
+                        });
+
+                    b.OwnsMany("Domain.Common.VisibilityCondition", "VisibilityConditions", b1 =>
+                        {
+                            b1.Property<Guid>("QuestionId")
+                                .HasColumnType("uniqueidentifier");
+
+                            b1.Property<int>("Id")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("int");
+
+                            SqlServerPropertyBuilderExtensions.UseIdentityColumn(b1.Property<int>("Id"));
+
+                            b1.Property<string>("TargetQuestionId")
+                                .IsRequired()
+                                .HasMaxLength(100)
+                                .HasColumnType("nvarchar(100)");
+
+                            b1.Property<int>("Type")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("int")
+                                .HasDefaultValue(1);
+
+                            b1.Property<string>("Value")
+                                .HasMaxLength(500)
+                                .HasColumnType("nvarchar(500)");
+
+                            b1.HasKey("QuestionId", "Id");
+
+                            b1.ToTable("VisibilityConditions");
+
+                            b1.WithOwner()
+                                .HasForeignKey("QuestionId");
+                        });
 
                     b.Navigation("Calculation");
 
                     b.Navigation("MathExpression");
 
                     b.Navigation("Step");
+
+                    b.Navigation("Validations");
+
+                    b.Navigation("VisibilityConditions");
                 });
 
             modelBuilder.Entity("Domain.Assessments.Step", b =>
                 {
-                    b.HasOne("Domain.Assessments.AssessmentVersion", null)
+                    b.HasOne("Domain.Assessments.AssessmentVersion", "Version")
                         .WithMany("Steps")
                         .HasForeignKey("VersionId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("Domain.Assessments.AssessmentVersion", "Version")
-                        .WithMany()
-                        .HasForeignKey("VersionId1")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
@@ -1344,50 +1515,13 @@ namespace Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("Domain.Assessments.AssessmentVersion", null)
+                    b.HasOne("Domain.Assessments.AssessmentVersion", "Version")
                         .WithMany()
                         .HasForeignKey("VersionId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("Domain.Assessments.AssessmentVersion", "Version")
-                        .WithMany()
-                        .HasForeignKey("VersionId1")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
                     b.Navigation("Version");
-                });
-
-            modelBuilder.Entity("Domain.Common.MathOperation", b =>
-                {
-                    b.HasOne("Domain.Common.MathExpression", null)
-                        .WithMany("Operations")
-                        .HasForeignKey("MathExpressionId")
-                        .OnDelete(DeleteBehavior.Cascade);
-                });
-
-            modelBuilder.Entity("Domain.Common.MathVariable", b =>
-                {
-                    b.HasOne("Domain.Common.MathExpression", null)
-                        .WithMany("Variables")
-                        .HasForeignKey("MathExpressionId")
-                        .OnDelete(DeleteBehavior.Cascade);
-                });
-
-            modelBuilder.Entity("Domain.Common.ValidationRule", b =>
-                {
-                    b.HasOne("Domain.Assessments.Question", null)
-                        .WithMany("Validations")
-                        .HasForeignKey("QuestionId")
-                        .OnDelete(DeleteBehavior.Cascade);
-                });
-
-            modelBuilder.Entity("Domain.Common.VisibilityCondition", b =>
-                {
-                    b.HasOne("Domain.Assessments.Question", null)
-                        .WithMany("VisibilityConditions")
-                        .HasForeignKey("QuestionId");
                 });
 
             modelBuilder.Entity("Domain.Results.AssessmentResult", b =>
@@ -1398,15 +1532,9 @@ namespace Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("Domain.Attempts.AssessmentAttempt", null)
+                    b.HasOne("Domain.Attempts.AssessmentAttempt", "Attempt")
                         .WithOne("Result")
                         .HasForeignKey("Domain.Results.AssessmentResult", "AttemptId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("Domain.Attempts.AssessmentAttempt", "Attempt")
-                        .WithMany()
-                        .HasForeignKey("AttemptId1")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
@@ -1425,20 +1553,25 @@ namespace Persistence.Migrations
                                 .HasColumnType("float");
 
                             b1.Property<int>("MaxScore")
-                                .HasColumnType("int");
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("int")
+                                .HasDefaultValue(0);
 
                             b1.Property<Guid>("QuestionId")
                                 .HasColumnType("uniqueidentifier");
 
                             b1.Property<string>("QuestionKey")
                                 .IsRequired()
-                                .HasColumnType("nvarchar(max)");
+                                .HasMaxLength(100)
+                                .HasColumnType("nvarchar(100)");
 
                             b1.Property<int>("QuestionType")
                                 .HasColumnType("int");
 
                             b1.Property<int>("Score")
-                                .HasColumnType("int");
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("int")
+                                .HasDefaultValue(0);
 
                             b1.HasKey("ResultId", "Id");
 
@@ -1453,12 +1586,38 @@ namespace Persistence.Migrations
                     b.Navigation("ScoredAnswers");
                 });
 
+            modelBuilder.Entity("Domain.Tools.SubmissionNote", b =>
+                {
+                    b.HasOne("Domain.Tools.ToolSubmission", null)
+                        .WithMany()
+                        .HasForeignKey("SubmissionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Domain.Tools.ToolSubmission", b =>
+                {
+                    b.HasOne("Domain.Users.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Domain.Users.ApplicationUser", b =>
                 {
                     b.HasOne("Domain.Companies.Company", null)
                         .WithMany()
                         .HasForeignKey("CompanyId")
                         .OnDelete(DeleteBehavior.SetNull);
+                });
+
+            modelBuilder.Entity("Domain.Users.UserToolAccess", b =>
+                {
+                    b.HasOne("Domain.Users.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<System.Guid>", b =>
@@ -1525,10 +1684,6 @@ namespace Persistence.Migrations
             modelBuilder.Entity("Domain.Assessments.Question", b =>
                 {
                     b.Navigation("Options");
-
-                    b.Navigation("Validations");
-
-                    b.Navigation("VisibilityConditions");
                 });
 
             modelBuilder.Entity("Domain.Assessments.Step", b =>
@@ -1541,13 +1696,6 @@ namespace Persistence.Migrations
                     b.Navigation("Answers");
 
                     b.Navigation("Result");
-                });
-
-            modelBuilder.Entity("Domain.Common.MathExpression", b =>
-                {
-                    b.Navigation("Operations");
-
-                    b.Navigation("Variables");
                 });
 
             modelBuilder.Entity("Domain.Companies.Company", b =>

@@ -38,6 +38,7 @@ public static class DependencyInjection
             })
             .AddRoles<IdentityRole<Guid>>()
             .AddEntityFrameworkStores<ValuationDbContext>()
+            .AddDefaultTokenProviders()
             .AddSignInManager();
 
         // ---- Direct context registration (required by Identity stores & EF tooling) ----

@@ -15,14 +15,9 @@ public class StepConfiguration : IEntityTypeConfiguration<Step>
 
         builder.HasIndex(s => new { s.VersionId, s.Order }).IsUnique();
 
-        builder.HasOne<AssessmentVersion>()
+        builder.HasOne(s => s.Version)
             .WithMany(v => v.Steps)
             .HasForeignKey(s => s.VersionId)
-            .OnDelete(DeleteBehavior.Cascade);
-
-        builder.HasMany(s => s.Questions)
-            .WithOne()
-            .HasForeignKey("StepId")
             .OnDelete(DeleteBehavior.Cascade);
     }
 }

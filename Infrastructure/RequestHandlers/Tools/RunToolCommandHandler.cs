@@ -28,9 +28,62 @@ public sealed class HttpCurrentUserAccessor(IHttpContextAccessor accessor) : ICu
     }
 }
 
+/// <summary>
+///     Sections of a tool result considered "advanced, paid value": Monte Carlo,
+///     tornado/sensitivity, scenario analysis and method-by-method breakdowns.
+///     Everything else stays free.
+/// </summary>
+public static class AdvancedSections
+{
+    private static readonly string[] Keys =
+        ["mc", "mcResults", "tornado", "scenarios", "scenarioValues", "allValues", "vals", "methods"];
+
+    /// <summary>Deep-clones the result and removes advanced keys at every object level.</summary>
+    public static JsonElement Strip(JsonElement element)
+    {
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream))
+        {
+            WriteStripped(element, writer);
+            writer.Flush();
+        }
+        return JsonDocument.Parse(stream.ToArray()).RootElement.Clone();
+    }
+
+    private static void WriteStripped(JsonElement el, Utf8JsonWriter w)
+    {
+        switch (el.ValueKind)
+        {
+            case JsonValueKind.Object:
+                w.WriteStartObject();
+                foreach (var p in el.EnumerateObject())
+                {
+                    if (Keys.Contains(p.Name, StringComparer.OrdinalIgnoreCase))
+                        continue;
+                    w.WritePropertyName(p.Name);
+                    WriteStripped(p.Value, w);
+                }
+                w.WriteEndObject();
+                break;
+
+            case JsonValueKind.Array:
+                w.WriteStartArray();
+                foreach (var item in el.EnumerateArray())
+                    WriteStripped(item, w);
+                w.WriteEndArray();
+                break;
+
+            default:
+                el.WriteTo(w);
+                break;
+        }
+    }
+}
+
 public sealed class RunToolCommandHandler(
     IToolRunnerResolver resolver,
     ICommandRepository<ToolSubmission> submissions,
+    IEntitlementService entitlements,
     ICurrentUserAccessor currentUser) : IRequestHandler<RunToolCommand, ToolRunResponse>
 {
     public async Task<ToolRunResponse> Handle(RunToolCommand request, CancellationToken ct)
@@ -40,6 +93,10 @@ public sealed class RunToolCommandHandler(
 
         var runner = resolver.Resolve(request.ToolCode);
         var outcome = runner.Run(request.Input);
+
+        var advancedIncluded = await entitlements.CanViewAdvancedAsync(currentUser.UserId, request.ToolCode, ct);
+        if (!advancedIncluded && outcome.Result is JsonElement raw)
+            outcome = outcome with { Result = AdvancedSections.Strip(raw) };
 
         var submission = ToolSubmission.Create(
             currentUser.UserId,
@@ -55,6 +112,7 @@ public sealed class RunToolCommandHandler(
             submission.Id,
             request.ToolCode,
             ToolInput.ToJsonElement(outcome.Result),
-            outcome.OverallScore);
+            outcome.OverallScore,
+            advancedIncluded);
     }
 }

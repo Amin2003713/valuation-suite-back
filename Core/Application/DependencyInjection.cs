@@ -27,6 +27,9 @@ public static class DependencyInjection
         // Tools: math engines (one runner per tool) + resolver
         services.AddToolRunners();
 
+        // Entitlements (pro / per-tool grants / pick-credits)
+        services.AddScoped<Application.Tools.IEntitlementService, Application.Tools.EntitlementService>();
+
         return services;
     }
 }

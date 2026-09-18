@@ -14,6 +14,7 @@ public class ToolFormConfiguration : IEntityTypeConfiguration<ToolForm>
         builder.Property(t => t.Description).HasMaxLength(1000);
         builder.Property(t => t.Kind).HasConversion<int>();
         builder.Property(t => t.SchemaJson).IsRequired();
+        builder.Property(t => t.Route).HasMaxLength(100);
     }
 }
 
@@ -27,5 +28,10 @@ public class ToolSubmissionConfiguration : IEntityTypeConfiguration<ToolSubmissi
 
         builder.HasIndex(s => new { s.UserId, s.ToolCode });
         builder.HasIndex(s => s.UserId);
+
+        builder.HasOne<Domain.Users.ApplicationUser>()
+            .WithMany()
+            .HasForeignKey(s => s.UserId)
+            .OnDelete(DeleteBehavior.ClientSetNull);
     }
 }

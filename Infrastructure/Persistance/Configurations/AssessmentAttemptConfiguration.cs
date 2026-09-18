@@ -21,7 +21,7 @@ public class AssessmentAttemptConfiguration : IEntityTypeConfiguration<Assessmen
         builder.HasIndex(a => a.VersionId);
         builder.HasIndex(a => new { a.UserId, a.VersionId });
 
-        builder.HasOne<AssessmentVersion>()
+        builder.HasOne(a => a.Version)
             .WithMany()
             .HasForeignKey(a => a.VersionId)
             .OnDelete(DeleteBehavior.Restrict);

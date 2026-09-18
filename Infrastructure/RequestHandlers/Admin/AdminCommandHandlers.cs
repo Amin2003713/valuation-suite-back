@@ -119,3 +119,22 @@ public sealed class SetAdminRolesCommandHandler(
         return (await userManager.GetRolesAsync(user)).ToList();
     }
 }
+
+/// <summary>
+///     Admin-initiated password reset. Bypasses the old-password check by design
+///     (support scenario); gated server-side by the customers.manage permission.
+/// </summary>
+public sealed class ResetAdminPasswordCommandHandler(UserManager<ApplicationUser> userManager)
+    : IRequestHandler<ResetAdminPasswordCommand>
+{
+    public async Task Handle(ResetAdminPasswordCommand request, CancellationToken ct)
+    {
+        var user = await userManager.FindByIdAsync(request.Id.ToString())
+            ?? throw ValuationException.NotFound("مشتری یافت نشد.");
+
+        var token = await userManager.GeneratePasswordResetTokenAsync(user);
+        var result = await userManager.ResetPasswordAsync(user, token, request.NewPassword);
+        if (!result.Succeeded)
+            throw ValuationException.BadRequest(string.Join(" | ", result.Errors.Select(e => e.Description)));
+    }
+}

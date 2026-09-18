@@ -33,9 +33,26 @@ public class ToolsController(IMediator mediator) : ControllerBase
     public async Task<IActionResult> Run(string toolCode, [FromBody] JsonElement input, CancellationToken ct)
         => Ok(await mediator.Send(new RunToolCommand { ToolCode = toolCode, Input = input }, ct));
 
+    /// <summary>
+    ///     Freemium catalog: tool prices (basics free, advanced paid), packages and
+    ///     the current user's access state. Powers the /pricing page.
+    /// </summary>
+    [HttpGet("pricing")]
+    [Authorize]
+    public async Task<IActionResult> Pricing(CancellationToken ct)
+        => Ok(await mediator.Send(new GetPricingCatalogQuery(), ct));
+
     /// <summary>The current user's saved submissions (optionally filtered by tool).</summary>
     [HttpGet("submissions")]
     [Authorize]
     public async Task<IActionResult> Submissions([FromQuery] string? toolCode, CancellationToken ct)
         => Ok(await mediator.Send(new GetToolSubmissionsQuery { ToolCode = toolCode }, ct));
+
+    /// <summary>
+    ///     Customer fetches the adviser notes on their own submission (marks them seen).
+    /// </summary>
+    [HttpGet("my-submissions/{submissionId:guid}/notes")]
+    [Authorize]
+    public async Task<IActionResult> MySubmissionNotes(Guid submissionId, CancellationToken ct)
+        => Ok(await mediator.Send(new Application.Admin.GetMySubmissionNotesQuery(submissionId), ct));
 }

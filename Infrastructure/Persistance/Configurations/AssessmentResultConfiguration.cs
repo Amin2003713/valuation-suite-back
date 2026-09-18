@@ -21,7 +21,7 @@ public class AssessmentResultConfiguration : IEntityTypeConfiguration<Assessment
         builder.HasIndex(r => r.AssessmentId);
         builder.HasIndex(r => r.IsCalculated);
 
-        builder.HasOne<AssessmentAttempt>()
+        builder.HasOne(r => r.Attempt)
             .WithOne(a => a.Result)
             .HasForeignKey<AssessmentResult>(r => r.AttemptId)
             .OnDelete(DeleteBehavior.Cascade);
@@ -34,6 +34,11 @@ public class AssessmentResultConfiguration : IEntityTypeConfiguration<Assessment
         builder.OwnsMany(r => r.ScoredAnswers, sa =>
         {
             sa.WithOwner().HasForeignKey("ResultId");
+            sa.Property(x => x.QuestionId).IsRequired();
+            sa.Property(x => x.QuestionKey).HasMaxLength(100);
+            sa.Property(x => x.QuestionType).HasConversion<int>();
+            sa.Property(x => x.Score).HasDefaultValue(0);
+            sa.Property(x => x.MaxScore).HasDefaultValue(0);
         });
         builder.Ignore(r => r.Metadata);
         builder.Ignore(r => r.StepScores);

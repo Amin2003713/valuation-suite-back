@@ -26,6 +26,51 @@ public sealed class GetAdminCustomersQueryHandler(IAdminQueryRepository repo)
     }
 }
 
+public sealed class GetAdminSubmissionsQueryHandler(IAdminQueryRepository repo)
+    : IRequestHandler<GetAdminSubmissionsQuery, AdminSubmissionListResponse>
+{
+    public async Task<AdminSubmissionListResponse> Handle(GetAdminSubmissionsQuery request, CancellationToken ct)
+    {
+        var (items, total) = await repo.SearchSubmissionsAsync(
+            Math.Max(1, request.Page), Math.Clamp(request.PageSize, 1, 100),
+            request.ToolCode, request.Search, request.UserId, ct);
+
+        return new AdminSubmissionListResponse(request.Page, Math.Clamp(request.PageSize, 1, 100), total, items);
+    }
+}
+
+public sealed class GetAdminToolsQueryHandler(IAdminQueryRepository repo)
+    : IRequestHandler<GetAdminToolsQuery, List<AdminToolRow>>
+{
+    public Task<List<AdminToolRow>> Handle(GetAdminToolsQuery request, CancellationToken ct)
+        => repo.GetToolsAsync(ct);
+}
+
+public sealed class GetAdminPaymentsQueryHandler(IAdminQueryRepository repo)
+    : IRequestHandler<GetAdminPaymentsQuery, AdminPaymentListResponse>
+{
+    public async Task<AdminPaymentListResponse> Handle(GetAdminPaymentsQuery request, CancellationToken ct)
+    {
+        var (items, total) = await repo.GetPaymentsAsync(
+            Math.Max(1, request.Page), Math.Clamp(request.PageSize, 1, 100),
+            request.UserId, request.Status, ct);
+
+        return new AdminPaymentListResponse(request.Page, Math.Clamp(request.PageSize, 1, 100), total, items);
+    }
+}
+
+public sealed class GetAdminCompaniesQueryHandler(IAdminQueryRepository repo)
+    : IRequestHandler<GetAdminCompaniesQuery, AdminCompanyListResponse>
+{
+    public async Task<AdminCompanyListResponse> Handle(GetAdminCompaniesQuery request, CancellationToken ct)
+    {
+        var (items, total) = await repo.GetCompaniesAsync(
+            Math.Max(1, request.Page), Math.Clamp(request.PageSize, 1, 100), request.Search, ct);
+
+        return new AdminCompanyListResponse(request.Page, Math.Clamp(request.PageSize, 1, 100), total, items);
+    }
+}
+
 public sealed class GetAdminCustomerQueryHandler(
     IAdminQueryRepository repo,
     Microsoft.AspNetCore.Identity.UserManager<Domain.Users.ApplicationUser> userManager)

@@ -13,7 +13,125 @@
 Note: the shell project root here is the **backend** (`src/`). Frontend files are read/written
 via absolute paths `C:/Users/amin/Desktop/valuation-suite/...`.
 
-## Current phase (session 3 — Admin area)
+## Current phase (session 5 — roles visible, company at register, freemium pricing, adviser notes, visual admin reporting)
+
+**User directives (session 5):**
+1. Every user (admin or not) must be identifiable in the admin area → roles now in auth responses + `/me` + customers table.
+2. Users must register their company too → optional `companyName` at register creates a Company.
+3. Admin reporting must be VISUAL (charts), not raw JSON → new analytics endpoint + chart components.
+4. ALL tools free for basics; advanced results (valuable info) need payment OR packages; user can pick any tools/how many (pick-N credits).
+5. Adviser role (new admin type) writes text/voice notes on results; customers buy advice per submission.
+6. On login client identifies role and loads correct pages.
+7. Zarinpal gateway activated for all payment kinds (server-computed amounts).
+8. Step UX: clicking an option auto-advances; misc UI/UX improvements.
+
+### Session 5 progress — BACKEND COMPLETE (builds + migration applied)
+
+- [x] **Domain**: `UserToolAccess` (per-tool grants, expiry optional), `AccessPackage`
+      (pick-N + curated bundles, duration, price), `SubmissionNote` (text + base64 voice),
+      `PaymentKind` (ProPlan/ToolAdvanced/Package/Advice) + Payment fields
+      (Kind/ToolCode/PackageId/SubmissionId), ToolForm fields (AdvancedPriceToman, Route,
+      AdvicePriceToman), Adviser role in AdminRoles + notes.write/access.manage perms.
+- [x] **EF**: configurations for the 3 new tables; migration `AccessAndNotes` generated +
+      **applied to DB** (27 tables total).
+- [x] **Application**: `IEntitlementService`+impl (IsPro, CanViewAdvanced, HasPaidAdvice,
+      Grant, pick-credit grant/consume), pricing catalog query (tools+packages+myAccesses).
+- [x] **Handlers**: `RunToolCommandHandler` now strips advanced sections (mc/tornado/
+      scenarios/vals/allValues/methods keys) from results when not entitled → **basic is
+      free, advanced is paid**; pricing catalog handler; admin handlers for analytics,
+      grants (grant/revoke), packages upsert, adviser notes (add/list/queue), customer
+      note delivery with seen-marking.
+- [x] **Controllers**: AuthController returns roles + company info (register accepts
+      companyName → creates Company); `/api/payments/checkout` typed endpoint (pro/tool/
+      package/advice — amounts always server-computed); callback grants by kind (pro
+      extends expiry, tool → perpetual grant, package → grants + pick credits, advice →
+      paid payment row); AdminController +7 routes: analytics, grants CRUD, packages,
+      adviser-queue, submissions/{id}/notes.
+- [x] EntitlementService registered in Application DI.
+
+### Session 5 remaining — FRONTEND
+
+- [ ] lib/api: roles/company in auth store; admin.ts + tools.ts new fields; pricing client.
+- [ ] Role-based redirect after login (admin → /admin, adviser → /adviser, else home).
+- [ ] /pricing page: tools free (advanced paid), packages, pick-N selector, checkout.
+- [ ] AdvancedLock UI on tool pages (server already strips advanced data).
+- [ ] /adviser area: queue + note composer (text + voice via MediaRecorder).
+- [ ] Notes display for customers on their submissions; advice purchase button.
+- [ ] Admin visual reporting: charts (submissions/day, tool usage, plan split, score
+      buckets, revenue/day, payment status) + roles badges on customers.
+- [ ] Step auto-advance on option click in question tools.
+- [ ] Typecheck + E2E + STATE.md.
+
+---
+
+## Session 4 (archived) — smoke tests + admin enrichment + UI/UX refactor
+
+**User directive:** continue from session 3; smoke-test server+client+all APIs; enrich the
+admin area (more features), refactor UI, improve UX. No questions — just implement.
+
+### Session 4 progress
+
+- [x] **EF model fixed**: `VisibilityCondition`/`ValidationRule`/`CalculationConfig`/
+      `MathExpression`(+nested `MathVariable`/`MathOperation`) were misconfigured as
+      top-level entities with nonsense PKs (e.g. PK=TargetQuestionId → seeding crash).
+      Re-mapped as **owned types** (inline in QuestionConfiguration — owned types cannot use
+      `IEntityTypeConfiguration`); `ScoredAnswer` props configured in AssessmentResultConfiguration.
+- [x] **Migration regenerated** (`InitialCreate`, 24 tables, **0 shadow FKs** — the earlier
+      `AssessmentId1`-style duplicates came from unclaimed navs + duplicated parent/child
+      relationship configs, all fixed in the 6 affected configurations).
+- [x] **DB recreated**: connection-string port fixed (1572→5012, matches docker `sqlserver`
+      container) in both appsettings.json and appsettings.Development.json;
+      `database drop --force` + `database update` succeeded.
+- [x] **Startup smoke test**: roles Admin/Support/Analyst created; IP assessment seeded
+      (7 steps / 47 questions); 13 tool forms seeded; register/login work.
+- [x] **Smoke bug fixed**: dashboard `GroupBy` with nested `Distinct().Count()` is not
+      translatable by EF — `GetTopToolsAsync` rewritten (two flat projections + in-memory join).
+- [x] **Admin enrichment (backend)**:
+      - `GET /api/admin/submissions` — paged global submissions explorer (filter: toolCode,
+        search in name/toolCode/user-email, userId)
+      - `GET /api/admin/tools` — tool catalog with usage stats (uses + distinct users)
+      - `GET /api/admin/companies` — paged company list (members, pro-members, paid totals)
+      - `PUT /api/admin/customers/{id}/password` — admin password reset (Identity reset token)
+      - `GET /api/admin/payments/export` — CSV export of the payments ledger
+      - `AdminSubmissionRow` now carries `userId` + `userEmail`; company row uses `Slug`
+- [x] **Backend builds clean**
+
+### Session 4 remaining
+
+- [x] Frontend: shared admin UI kit `app/components/admin/ui.tsx` (PageHeader, StatCard,
+      Badge/PlanBadge/ActiveBadge/PaymentStatusBadge, DataTable with row-click + hover,
+      Pagination, debounced SearchInput, Select, Modal with Esc-close, Loading,
+      EmptyState, ErrorNote, money/dateTime fa-IR helpers)
+- [x] Frontend: layout sidebar upgraded — icons, active indicator bar, new nav items
+- [x] Frontend: **new pages** — `/admin/submissions` (global explorer: search + tool
+      filter + side-by-side input/result JSON viewer), `/admin/tools` (catalog + usage
+      KPIs), `/admin/companies` (members/pro/revenue aggregates)
+- [x] Frontend: dashboard + customers + detail + payments pages refactored onto the kit;
+      payments got the **CSV export** button (authenticated blob download); detail page
+      got the **password reset** modal
+- [x] Frontend typecheck passes (0 errors)
+- [x] **E2E API round (all 12 admin endpoints) — green**: dashboard, customers list,
+      customer detail, update customer, payments (handler was MISSING — added
+      `GetAdminPaymentsQueryHandler`), global submissions, tools, companies, password
+      reset (needed `.AddDefaultTokenProviders()` in Identity setup — fixed), CSV
+      export, role assignment (200), unauth → 401
+- [x] Verified end-to-end: run IDEA-ASSESS via API → submission appears in admin
+      explorer with userEmail; password reset → login with new password works
+
+**Session 4 COMPLETE.**
+
+### Remaining (for a future session)
+
+- [ ] Browser-level smoke of the Next.js frontend (`npm run dev`) against the running API
+- [ ] IP assessment frontend (`IpAssessment.tsx`) still scores locally — should call
+      `runTool`/attempt APIs like the other question tools
+- [ ] Zarinpal production merchant + webhook signature validation
+- [ ] patent-search → backend proxy (deferred per user)
+- [ ] Refresh tokens, rate limiting
+
+---
+
+## Session 3 (admin area) — COMPLETE ✅
 
 **User decisions (confirmed):**
 1. **Roles + permissions** (Admin/Support/Analyst with granular permission claims).

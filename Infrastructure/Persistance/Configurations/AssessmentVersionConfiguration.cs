@@ -19,7 +19,7 @@ public class AssessmentVersionConfiguration : IEntityTypeConfiguration<Assessmen
         builder.Property(v => v.IsDraft).HasDefaultValue(true);
         builder.Property(v => v.IsPublished).HasDefaultValue(false);
 
-        builder.HasOne<Assessment>()
+        builder.HasOne(v => v.Assessment)
             .WithMany(a => a.Versions)
             .HasForeignKey(v => v.AssessmentId)
             .OnDelete(DeleteBehavior.Cascade);
