@@ -16,6 +16,7 @@ public class PaymentConfiguration : IEntityTypeConfiguration<Payment>
         builder.Property(p => p.ErrorMessage).HasMaxLength(1000);
         builder.Property(p => p.Status).HasConversion<int>().HasDefaultValue(PaymentStatus.Pending);
         builder.Property(p => p.Amount).HasConversion<long>();
+        builder.Property(p => p.Months);
 
         builder.HasIndex(p => p.UserId);
         builder.HasIndex(p => p.Authority);

@@ -1,6 +1,8 @@
 using Application.Interfaces;
+using Application.Users;
 using Common.Exceptions;
 using Domain.Users;
+using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -14,7 +16,9 @@ namespace Web.Api.Controllers;
 [Route("api/auth")]
 public class AuthController(
     UserManager<ApplicationUser> userManager,
-    TokenService tokenService) : ControllerBase
+    TokenService tokenService,
+    IMediator mediator,
+    Application.Interfaces.Base.ICommandRepository<Domain.Companies.Company> companyCommands) : ControllerBase
 {
     [HttpPost("register")]
     [AllowAnonymous]
@@ -48,7 +52,8 @@ public class AuthController(
         {
             var slug = Slugify(request.CompanyName);
             var company = Domain.Companies.Company.Create(request.CompanyName.Trim(), slug);
-            user.Company = company;
+            await companyCommands.AddAsync(company, ct, saveNow: true);
+            user.CompanyId = company.Id;
             await userManager.UpdateAsync(user);
         }
 
@@ -104,6 +109,20 @@ public class AuthController(
             user.Company != null ? user.Company.Name : null,
             roles.ToList()));
     }
+
+    /// <summary>Reads the current user's profile (account page).</summary>
+    [HttpGet("profile")]
+    [Authorize]
+    public async Task<IActionResult> Profile(CancellationToken ct)
+        => Ok(await mediator.Send(new GetMyProfileQuery(), ct));
+
+    /// <summary>Updates the current user's own profile (name / phone).</summary>
+    [HttpPut("profile")]
+    [Authorize]
+    public async Task<IActionResult> UpdateProfile([FromBody] UpdateProfileRequest request, CancellationToken ct)
+        => Ok(await mediator.Send(new UpdateMyProfileCommand(request.DisplayName, request.PhoneNumber), ct));
+
+    public record UpdateProfileRequest(string? DisplayName, string? PhoneNumber);
 
     private AuthResponse BuildAuthResponse(ApplicationUser user, IList<string> roles, string token, DateTime expiresAt)
     {

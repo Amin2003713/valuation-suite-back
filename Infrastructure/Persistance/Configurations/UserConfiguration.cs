@@ -17,9 +17,7 @@ public class UserConfiguration : IEntityTypeConfiguration<ApplicationUser>
         builder.HasIndex(u => u.Plan);
         builder.HasIndex(u => u.CompanyId);
 
-        builder.Ignore(u => u.Company);
-
-        builder.HasOne<Domain.Companies.Company>()
+        builder.HasOne(u => u.Company)
             .WithMany()
             .HasForeignKey(u => u.CompanyId)
             .OnDelete(DeleteBehavior.SetNull);

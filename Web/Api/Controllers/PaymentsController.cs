@@ -104,10 +104,14 @@ public class PaymentsController(
         switch (request.Kind)
         {
             case "pro":
-                amount = _options.DefaultAmountToman;
-                description = "ارتقا به حساب Pro";
+            {
+                var months = request.Months is { } m && ProTiers.Any(t => t.Months == m) ? m : 1;
+                amount = ProPrice(months);
+                description = months == 1 ? "اشتراک یک‌ماهه Pro" : $"اشتراک {months}-ماهه Pro";
                 payment.Kind = PaymentKind.ProPlan;
+                payment.Months = months;
                 break;
+            }
 
             case "tool":
             {
@@ -192,7 +196,24 @@ public class PaymentsController(
 
     public record CheckoutRequest(
         string Kind, string? ToolCode = null, Guid? PackageId = null,
-        Guid? SubmissionId = null, List<string>? PickToolCodes = null);
+        Guid? SubmissionId = null, List<string>? PickToolCodes = null,
+        int? Months = null);
+
+    /// <summary>Tiered Pro pricing: unit price per month with volume discounts. Amounts always server-computed.</summary>
+    public static readonly (int Months, decimal PerMonthFactor)[] ProTiers =
+    [
+        (1, 1.00m),
+        (3, 0.90m),
+        (6, 0.80m),
+        (12, 0.65m),
+    ];
+
+    /// <summary>Price in Toman for a Pro plan of the given length (monthly base × months × tier discount).</summary>
+    private long ProPrice(int months)
+    {
+        var tier = ProTiers.FirstOrDefault(t => t.Months == months, ProTiers[0]).PerMonthFactor;
+        return (long)Math.Round(_options.DefaultAmountToman * months * tier);
+    }
 
     /// <summary>
     ///     Zarinpal redirects the payer here. Verifies the payment and grants the
@@ -203,7 +224,7 @@ public class PaymentsController(
     public async Task<IActionResult> Callback(
         [FromQuery] string? Authority,
         [FromQuery] string? Status,
-        [FromQuery] Guid userId,
+        [FromQuery] string? userId,
         CancellationToken ct)
     {
         var redirect = (bool ok, string? message = null) =>
@@ -212,7 +233,10 @@ public class PaymentsController(
         if (string.IsNullOrWhiteSpace(Authority) || !string.Equals(Status, "OK", StringComparison.OrdinalIgnoreCase))
             return redirect(false, "پرداخت لغو شد");
 
-        var payment = await paymentQueries.Table
+        // Load through the WRITE-side repository: we mutate the payment here and
+        // persist via paymentCommands — a read-repo entity would be tracked by a
+        // different context and the status change would silently never save.
+        var payment = await paymentCommands.Table
             .FirstOrDefaultAsync(p => p.Authority == Authority, ct);
 
         if (payment is null)
@@ -248,7 +272,8 @@ public class PaymentsController(
                 {
                     // Extend from the later of now / current expiry.
                     var from = user.PlanExpiresAt is { } e && e > DateTime.UtcNow ? e : DateTime.UtcNow;
-                    user.UpgradeToPro(from.AddDays(_options.ProPlanDurationDays));
+                    var months = payment.Months ?? Math.Max(1, _options.ProPlanDurationDays / 30);
+                    user.UpgradeToPro(from.AddMonths(months));
                     await userManager.UpdateAsync(user);
                 }
                 break;

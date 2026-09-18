@@ -3,6 +3,96 @@
 > This file tracks the current state of the ongoing work so any future session can resume
 > exactly where we left off. **Update this file after every meaningful change.**
 
+## Current phase (session 7 — IN PROGRESS: plans page, callback page, account area, adviser everywhere)
+
+### Session 7 scope (user request)
+1. "Upgrade to Pro" must route to a **/plans** page where the user picks a plan duration and pays.
+2. User can **edit profile** and see **payment history** and **tool usage history** → /account.
+3. **/payment/callback?payment=success** page — Zarinpal redirect target; refreshes session.
+4. Payment wired into tools: paying for a tool's advanced section unlocks it immediately.
+5. **Adviser for ALL tools** (advice price on every tool) + adviser page active in admin area.
+6. Test all pages, fix errors.
+
+### Session 7 progress — BACKEND ✅ COMPLETE
+- [x] `Payment.Months` (Pro subscription length) + migration `PaymentMonths` **generated + applied**.
+- [x] Checkout `kind=pro` now takes `months` (1/3/6/12) with **tiered server-computed pricing**
+      (base monthly × months × discount 1.0/0.9/0.8/0.65); callback extends Pro by months
+      (`AddMonths`, no longer the fixed ProPlanDurationDays).
+- [x] **Profile API (MediatR, thin controller)**: `GET/PUT /api/auth/profile` →
+      `GetMyProfileQuery` + `UpdateMyProfileCommand` (name + phone with 09xxxxxxxxx validation),
+      handlers in `Infrastructure/RequestHandlers/Users/ProfileHandlers.cs`.
+- [x] **Adviser on ALL tools**: seeder `ToolFormsSeeder.Pricing` defaults advanced/advice/route
+      for all 13 tools (JOB-EVAL fully free, advice-only); live DB updated via SQL — every tool
+      now has AdvicePriceToman > 0.
+- [x] Build clean.
+
+### Session 7 remaining — FRONTEND ✅ COMPLETE (typecheck 0 errors)
+- [x] **/plans** — Pro duration picker (1/3/6/12 months with tiered prices + discount tags),
+      packages grid, per-tool unlock cards; all CTAs checkout through Zarinpal;
+      unauthenticated users get the auth modal. /pricing Pro banner now links here.
+- [x] **/payment/callback** — reads ?payment=success|failed&message=…, re-fetches /me so
+      plan/entitlements land instantly, success → حساب من/home, failure → retry /plans.
+- [x] **/account** — 3 tabs: profile (edit name + phone via PUT /api/auth/profile),
+      payments history (/api/payments/mine with status/kind badges + refId), usage history
+      (/api/tools/submissions with tool/score/date). Header avatar menu → حساب من +
+      ارتقا به Pro (→ /plans).
+- [x] **AdvancedLock** — now offers **direct checkout** for that tool's advanced sections
+      (button label shows the DB price) with /plans fallback.
+- [x] **Admin sidebar** — new "صف کارشناسان" entry pointing to /adviser (visible with
+      submissions.read; the /adviser layout already accepts Admin + Adviser roles).
+- [x] globals.css: .link-btn + neutral account-dropdown link styles.
+- [x] `npx tsc --noEmit` → 0 errors.
+
+### Session 7 remaining — E2E verify (next)
+- [ ] Start API, verify: pro checkout months=6 prices with 0.8 tier, profile GET/PUT,
+      pricing catalog shows advice prices on all 13 tools, callback redirect hits
+      /payment/callback?payment=success.
+
+---
+
+## Session 6 archive (✅ COMPLETE — monetization rollout to all tools + live Zarinpal sandbox e2e)
+
+### Fixes
+- [x] **Zarinpal `metadata.mobile must be a string`** — v4 rejects nulls inside metadata;
+      `CreatePaymentAsync` now builds a `Dictionary<string,string>` metadata (email/mobile
+      only when present) and omits metadata entirely when both are empty.
+- [x] **Zarinpal error parsing** — v4 `errors` can be object/array-of-objects/array-of-strings;
+      `ZarinpalResponse<T>.Errors` is now raw `JsonElement?` + `ErrorMessage()` that extracts
+      the message from any shape (was crashing the 500 handler before).
+- [x] **Callback save bug (real money bug)** — the callback loaded the Payment through the
+      READ repo but saved via the WRITE repo → status/RefId/PaidAt changes were silently
+      lost (user got Pro but payment stayed AwaitingGateway). Now loads via
+      `paymentCommands.Table` so the mutation is tracked and persisted.
+
+### Rollout to ALL tools (frontend)
+- [x] `useBackendCompute` now returns `advancedIncluded` (from run response) alongside
+      `submissionId`; `useToolMeta(toolCode)` returns price/advice/route meta.
+- [x] **AdvancedLock + NotesPanel wired into every calculator**: startup-valuation,
+      trademark-valuation, knowhow-valuation, general-ip-valuation, pharma-ip-valuation,
+      intangible-assets, brand-valuation (lock under ToolLayout top; notes in the
+      final/summary tab). Question tool idea-assessment got NotesPanel in the results card.
+- [x] Frontend typecheck clean.
+
+### Live Zarinpal sandbox verification (merchant configured, Sandbox=true)
+- [x] Pro checkout → authority `S0000…` + `sandbox.zarinpal.com/pg/StartPay/…` gateway URL;
+      sandbox page has OK/NOK verify links → clicking OK marks session paid → callback
+      → **payment status=3 Paid, refId=495529401, paidAt set, user plan=Pro isPro=true**,
+      re-login token → `advancedIncluded:true` on paid tools.
+- [x] Tool checkout (BRAND-VAL 150000 Toman from DB, server-computed) → paid → perpetual
+      `UserToolAccess` grant → `advancedIncluded:true`, pricing catalog
+      `advancedUnlocked:true`.
+- [x] Package + advice checkouts return real authority/gateway URLs.
+
+### Data seeded (dev DB)
+- Prices: BRAND-VAL 150k+advice 300k; STARTUP-VAL/TRADEMARK-VAL/PATENT-VAL/PHARMA-IP 120k;
+  INTANGIBLE/KNOWHOW 100k; routes filled for all 13 tools.
+- Packages: «بسته استارتاپی» (STARTUP-VAL+IDEA-ASSESS+INNOV-READ, 250k, perpetual) and
+  «بسته مالکیت فکری» (pick-3, 60 days, 300k).
+- NOTE: `ToolFormsSeeder` only inserts missing tool codes — price updates live in the DB;
+  to change prices use SQL against `ToolForms` (or extend the seeder).
+
+---
+
 ## Project layout (two repos)
 
 | Repo | Path | Stack |
@@ -13,7 +103,7 @@
 Note: the shell project root here is the **backend** (`src/`). Frontend files are read/written
 via absolute paths `C:/Users/amin/Desktop/valuation-suite/...`.
 
-## Current phase (session 5 — roles visible, company at register, freemium pricing, adviser notes, visual admin reporting)
+## Session 5 archive (✅ COMPLETE — roles visible, company at register, freemium pricing, adviser notes, visual admin reporting)
 
 **User directives (session 5):**
 1. Every user (admin or not) must be identifiable in the admin area → roles now in auth responses + `/me` + customers table.
@@ -49,18 +139,65 @@ via absolute paths `C:/Users/amin/Desktop/valuation-suite/...`.
       adviser-queue, submissions/{id}/notes.
 - [x] EntitlementService registered in Application DI.
 
-### Session 5 remaining — FRONTEND
+### Session 5 remaining — FRONTEND ✅ COMPLETE + E2E VERIFIED
 
-- [ ] lib/api: roles/company in auth store; admin.ts + tools.ts new fields; pricing client.
-- [ ] Role-based redirect after login (admin → /admin, adviser → /adviser, else home).
-- [ ] /pricing page: tools free (advanced paid), packages, pick-N selector, checkout.
-- [ ] AdvancedLock UI on tool pages (server already strips advanced data).
-- [ ] /adviser area: queue + note composer (text + voice via MediaRecorder).
-- [ ] Notes display for customers on their submissions; advice purchase button.
-- [ ] Admin visual reporting: charts (submissions/day, tool usage, plan split, score
-      buckets, revenue/day, payment status) + roles badges on customers.
-- [ ] Step auto-advance on option click in question tools.
-- [ ] Typecheck + E2E + STATE.md.
+- [x] lib/api: roles/company in auth store (`AuthPayload.user.roles`, `hasRole`,
+      `isAdminUser`); auth.ts returns roles+company from register/login/me; admin.ts got
+      analytics/grants/notes clients + `hasNotes`/`unreadNotes` on submissions; tools.ts
+      carries route/prices + `advancedIncluded` on runs; new `pricing.ts` client.
+- [x] **Role-based redirect after login** — AuthContext `homeFor()`: Admin/Support/Analyst
+      → `/admin`, Adviser → `/adviser`, others stay. Login → correct area automatically.
+- [x] **/pricing page** — Pro banner (990000 تومان/ماه), packages grid, **pick-N custom
+      bundle builder** (select exactly N tools), per-tool advanced purchase table with
+      free/unlocked/price badges, "my active accesses" chips, all via Zarinpal checkout.
+- [x] **AdvancedLock component** — shown on calculator pages when the server stripped
+      advanced sections (detected via missing `mc`/`tornado` in result); wired into
+      brand-valuation as the pattern; CTA → /pricing.
+- [x] **/adviser area** (`/adviser` + AdviserLayout role guard) — queue of paid reviews
+      with input/result viewers, **NoteComposer with MediaRecorder voice recording**
+      (base64 webm, ≤2min) + text, submit → customer sees it. NotesPanel component for
+      customers (audio player via blob URL, buy-advice CTA) wired into brand-valuation
+      final tab; customer endpoint `/api/tools/my-submissions/{id}/notes` marks seen.
+- [x] **Admin visual reporting** — `/admin/analytics` page: submissions/day bar,
+      revenue/day bar (compact money), tool usage bar, score-bucket histogram, plan
+      donut, payment-status donut — zero raw JSON. New sidebar entry "گزارش تصویری".
+      **Roles badge column** added to admin customers table (Admin=purple chip,
+      others light; "مشتری" when none).
+- [x] **Step auto-advance UX** — idea-assessment: clicking an option scrolls the next
+      unanswered question into view (250ms delay), final question glides to the CTA.
+- [x] Register modal now has optional **company name field**.
+- [x] `npx tsc --noEmit` → 0 errors.
+
+### Session 5 E2E verification (API smoke, all green)
+
+- Register with company → Company row created + linked (fixed: UserConfiguration
+  previously `Ignore(u => u.Company)` — now a real navigation; controller saves the
+  company explicitly through `ICommandRepository<Company>` before linking).
+- Login returns `roles` array; bootstrapped admin2 → `["Admin"]` + all perm claims.
+- `GET /api/tools/pricing` → tools with prices + packages + myAccesses.
+- **Freemium verified**: free run of BRAND-VAL → `advancedIncluded:false`, `mc`/`tornado`
+  keys ABSENT from result; after admin grant → `advancedIncluded:true`, keys present.
+  (Root cause fix: runners return typed objects, not JsonElement — Strip now serializes
+  via `ToolInput.WriteOptions` before filtering.)
+- Advice checkout validates: free-advanced tool rejected, advice on tool with
+  `advicePriceToman=0` rejected, unknown package → 404, unauth → 401.
+- Adviser note created via `/api/admin/submissions/{id}/notes` → customer sees it via
+  `/api/tools/my-submissions/{id}/notes` (seenByCustomer:true after fetch).
+- Grants: POST 204 → list shows row → DELETE 204 → gone.
+- Analytics: submissionsPerDay/toolUsage/planDistribution populated with live data.
+- Note: BRAND-VAL synthetic payloads with all-zero forecast rows can produce Infinity
+  in the MC engine (pre-existing engine behavior, unrelated to session 5); the real
+  frontend initialState works.
+
+### Session 5 deployment notes
+
+- `AdvancedPriceToman`/`AdvicePriceToman`/`Route` are all **0/empty by default** — set
+  real prices via a DB update or extend `ToolFormsSeeder` (seeder only fills new tools;
+  use SQL `UPDATE ToolForms SET AdvancedPriceToman=… WHERE ToolCode='…'`).
+- Seed 1–2 `AccessPackage` rows for the pricing page's package grid (none exist yet).
+- `AdminBootstrap:Emails` now contains `admin@yourdomain.com` + `admin2@test.local` (dev).
+- Zarinpal `MerchantId` is still the sandbox placeholder — checkout returns a clear
+  Persian error until a real merchant ID is configured.
 
 ---
 

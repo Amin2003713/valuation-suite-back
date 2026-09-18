@@ -5,6 +5,7 @@ using MediatR;
 using Microsoft.AspNetCore.Http;
 using System.Security.Claims;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Application.Interfaces.Base;
 
 namespace RequestHandlers.Tools;
@@ -38,44 +39,51 @@ public static class AdvancedSections
     private static readonly string[] Keys =
         ["mc", "mcResults", "tornado", "scenarios", "scenarioValues", "allValues", "vals", "methods"];
 
-    /// <summary>Deep-clones the result and removes advanced keys at every object level.</summary>
-    public static JsonElement Strip(JsonElement element)
+    /// <summary>
+    ///     Serializes the result (camelCase, exactly as the client receives it) and
+    ///     removes advanced keys at every object level. Uses in-place JsonNode removal
+    ///     so every remaining property name — including explicit [JsonPropertyName]
+    ///     overrides like "Nd1" — is preserved verbatim (a dictionary round-trip with
+    ///     DictionaryKeyPolicy would silently rename them and break the client).
+    /// </summary>
+    public static JsonElement Strip(object result)
     {
-        using var stream = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(stream))
-        {
-            WriteStripped(element, writer);
-            writer.Flush();
-        }
-        return JsonDocument.Parse(stream.ToArray()).RootElement.Clone();
+        var node = JsonSerializer.SerializeToNode(result, ToolInput.WriteOptions);
+        if (node is not null)
+            StripNode(node);
+        return node?.Deserialize<JsonElement>()
+               ?? JsonSerializer.SerializeToElement(new { }, ToolInput.WriteOptions);
     }
 
-    private static void WriteStripped(JsonElement el, Utf8JsonWriter w)
+    private static void StripNode(JsonNode node)
     {
-        switch (el.ValueKind)
+        switch (node)
         {
-            case JsonValueKind.Object:
-                w.WriteStartObject();
-                foreach (var p in el.EnumerateObject())
+            case JsonObject obj:
+            {
+                foreach (var key in obj.Where(p => Keys.Contains(p.Key, StringComparer.OrdinalIgnoreCase))
+                    .Select(p => p.Key).ToList())
                 {
-                    if (Keys.Contains(p.Name, StringComparer.OrdinalIgnoreCase))
-                        continue;
-                    w.WritePropertyName(p.Name);
-                    WriteStripped(p.Value, w);
+                    obj.Remove(key);
                 }
-                w.WriteEndObject();
-                break;
 
-            case JsonValueKind.Array:
-                w.WriteStartArray();
-                foreach (var item in el.EnumerateArray())
-                    WriteStripped(item, w);
-                w.WriteEndArray();
+                foreach (var (_, value) in obj)
+                {
+                    if (value is not null)
+                        StripNode(value);
+                }
                 break;
+            }
 
-            default:
-                el.WriteTo(w);
+            case JsonArray arr:
+            {
+                foreach (var item in arr)
+                {
+                    if (item is not null)
+                        StripNode(item);
+                }
                 break;
+            }
         }
     }
 }
@@ -95,8 +103,8 @@ public sealed class RunToolCommandHandler(
         var outcome = runner.Run(request.Input);
 
         var advancedIncluded = await entitlements.CanViewAdvancedAsync(currentUser.UserId, request.ToolCode, ct);
-        if (!advancedIncluded && outcome.Result is JsonElement raw)
-            outcome = outcome with { Result = AdvancedSections.Strip(raw) };
+        if (!advancedIncluded)
+            outcome = outcome with { Result = AdvancedSections.Strip(outcome.Result) };
 
         var submission = ToolSubmission.Create(
             currentUser.UserId,

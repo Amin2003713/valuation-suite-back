@@ -1,5 +1,6 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -53,14 +54,24 @@ public class ZarinpalService(HttpClient http, IOptions<ZarinpalOptions> options,
         string? mobile = null,
         CancellationToken ct = default)
     {
-        var payload = new
+        // Zarinpal v4 rejects null values inside metadata ("metadata.mobile must be a
+        // string") — only include fields we actually have, and omit metadata entirely
+        // when both are missing.
+        var metadata = new Dictionary<string, string>();
+        if (!string.IsNullOrWhiteSpace(email))
+            metadata["email"] = email.Trim();
+        if (!string.IsNullOrWhiteSpace(mobile))
+            metadata["mobile"] = mobile.Trim();
+
+        var payload = new Dictionary<string, object>
         {
-            merchant_id = _options.MerchantId,
-            amount = amountToman, // Toman
-            callback_url = callbackUrl,
-            description = description ?? "Valuation Suite Pro subscription",
-            metadata = new { email, mobile },
+            ["merchant_id"] = _options.MerchantId,
+            ["amount"] = amountToman, // Toman
+            ["callback_url"] = callbackUrl,
+            ["description"] = description ?? "t",
         };
+        if (metadata.Count > 0)
+            payload["metadata"] = metadata;
 
         try
         {
@@ -73,9 +84,9 @@ public class ZarinpalService(HttpClient http, IOptions<ZarinpalOptions> options,
                 return new ZarinpalStartResult(true, authority, _options.StartPayUrl(authority), body.Data.Code, null);
             }
 
-            var error = body?.Errors?.Message ?? body?.Errors?.Code?.ToString() ?? "Unknown Zarinpal error";
+            var error = body?.ErrorMessage() ?? "Unknown Zarinpal error";
             logger.LogWarning("Zarinpal request failed: {Error}", error);
-            return new ZarinpalStartResult(false, null, null, body?.Errors?.Code, error);
+            return new ZarinpalStartResult(false, null, null, body?.Data?.Code, error);
         }
         catch (Exception ex)
         {
@@ -108,9 +119,9 @@ public class ZarinpalService(HttpClient http, IOptions<ZarinpalOptions> options,
                 return new ZarinpalVerifyResult(true, body.Data.RefId?.ToString(), null, body.Data.Code, null);
             }
 
-            var error = body?.Errors?.Message ?? $"Verification failed (code {body?.Data?.Code})";
+            var error = body?.ErrorMessage() ?? $"Verification failed (code {body?.Data?.Code})";
             logger.LogWarning("Zarinpal verify failed: {Error}", error);
-            return new ZarinpalVerifyResult(false, null, null, body?.Data?.Code ?? body?.Errors?.Code, error);
+            return new ZarinpalVerifyResult(false, null, null, body?.Data?.Code, error);
         }
         catch (Exception ex)
         {
@@ -127,8 +138,54 @@ internal class ZarinpalResponse<TData>
     [JsonPropertyName("data")]
     public TData? Data { get; set; }
 
+    // Zarinpal v4 quirk: "errors" may be an object, an array of objects,
+    // or an array of strings depending on the failure — keep it raw and
+    // extract the message defensively.
     [JsonPropertyName("errors")]
-    public ZarinpalError? Errors { get; set; }
+    public JsonElement? Errors { get; set; }
+
+    public string? ErrorMessage()
+    {
+        if (Errors is not { } e)
+            return null;
+
+        try
+        {
+            // object form: { code, message }
+            if (e.ValueKind == JsonValueKind.Object)
+            {
+                if (e.TryGetProperty("message", out var m) && m.ValueKind == JsonValueKind.String)
+                    return m.GetString();
+                if (e.TryGetProperty("validations", out var v) && v.ValueKind == JsonValueKind.Object)
+                    return "validation: " + v.GetRawText();
+                return e.GetRawText();
+            }
+
+            // array form: [{ code, message }] or ["msg"]
+            if (e.ValueKind == JsonValueKind.Array)
+            {
+                var parts = new List<string>();
+                foreach (var item in e.EnumerateArray())
+                {
+                    if (item.ValueKind == JsonValueKind.String)
+                        parts.Add(item.GetString() ?? "");
+                    else if (item.ValueKind == JsonValueKind.Object &&
+                             item.TryGetProperty("message", out var m) &&
+                             m.ValueKind == JsonValueKind.String)
+                        parts.Add(m.GetString() ?? "");
+                }
+                if (parts.Count > 0)
+                    return string.Join(" | ", parts);
+                return e.GetRawText();
+            }
+        }
+        catch
+        {
+            // fall through to raw text
+        }
+
+        return e.GetRawText();
+    }
 }
 
 internal class ZarinpalRequestData

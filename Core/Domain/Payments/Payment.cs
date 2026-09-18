@@ -18,6 +18,9 @@ public sealed class Payment : BaseEntity
     /// <summary>What this payment buys when verified.</summary>
     public PaymentKind Kind { get; set; } = PaymentKind.ProPlan;
 
+    /// <summary>Subscription length for Kind=ProPlan (months); null = default from config.</summary>
+    public int? Months { get; set; }
+
     /// <summary>Tool code for Kind=ToolAdvanced, null otherwise.</summary>
     public string? ToolCode { get; set; }
 

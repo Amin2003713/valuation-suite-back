@@ -31,10 +31,41 @@ public static class ToolFormsSeeder
         }
 
         foreach (var d in forms)
-            db.Set<ToolForm>().Add(ToolForm.Create(d.Code, d.Title, d.Description, d.Kind, d.Schema, d.Sort));
+        {
+            var (advanced, advice, route) = Pricing.For(d.Code);
+            db.Set<ToolForm>().Add(ToolForm.Create(d.Code, d.Title, d.Description, d.Kind, d.Schema, d.Sort,
+                advancedPriceToman: advanced, route: route, advicePriceToman: advice));
+        }
 
         await db.SaveChangesAsync(ct);
         logger.LogInformation("Seeded {Count} tool form definitions", forms.Count);
+    }
+
+    /// <summary>
+    ///     Default monetization per tool (Toman): basics free everywhere; advanced
+    ///     sections and adviser reviews are paid on every tool.
+    /// </summary>
+    public static class Pricing
+    {
+        private static readonly Dictionary<string, (long Advanced, long Advice, string Route)> Table = new()
+        {
+            ["IDEA-ASSESS"] = (120_000, 150_000, "idea-assessment"),
+            ["INNOV-READ"] = (120_000, 150_000, "innovation-readiness"),
+            ["IP-AUDIT"] = (150_000, 200_000, "ip-audit"),
+            ["JOB-EVAL"] = (0, 120_000, "job-evaluation"),          // fully free, advice only
+            ["WIPO-DIAG"] = (120_000, 150_000, "wipo-diagnostics"),
+            ["IPSCORE"] = (150_000, 200_000, "patent-valuation"),
+            ["STARTUP-VAL"] = (120_000, 250_000, "startup-valuation"),
+            ["BRAND-VAL"] = (150_000, 300_000, "brand-valuation"),
+            ["TRADEMARK-VAL"] = (120_000, 250_000, "trademark-valuation"),
+            ["PATENT-VAL"] = (150_000, 250_000, "general-ip-valuation"),
+            ["PHARMA-IP"] = (120_000, 300_000, "pharma-ip-valuation"),
+            ["INTANGIBLE"] = (100_000, 250_000, "intangible-assets"),
+            ["KNOWHOW"] = (100_000, 250_000, "knowhow-valuation"),
+        };
+
+        public static (long Advanced, long Advice, string Route) For(string code) =>
+            Table.TryGetValue(code, out var v) ? v : (0, 150_000, string.Empty);
     }
 
     private static string Json(object o) => System.Text.Json.JsonSerializer.Serialize(o);
