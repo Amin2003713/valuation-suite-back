@@ -18,7 +18,7 @@ public sealed class UserToolAccess : BaseEntity
     public Guid? PaymentId { get; set; }
     public Guid? GrantedByUserId { get; set; }
 
-    public bool IsActive(DateTime utcNow) =>
+    public new bool IsActive(DateTime utcNow) =>
         ExpiresAt is null || ExpiresAt > utcNow;
 
     public static UserToolAccess Grant(
@@ -46,7 +46,7 @@ public sealed class AccessPackage : BaseEntity
     public int? DurationDays { get; set; }
 
     public long PriceToman { get; set; }
-    public bool IsActive { get; set; } = true;
+    public new bool IsActive { get; set; } = true;
     public int SortOrder { get; set; }
 
     public List<string> ToolCodes()

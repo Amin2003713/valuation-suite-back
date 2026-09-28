@@ -147,12 +147,6 @@ public sealed record GetAdminCompanyMembersQuery(Guid CompanyId) : IRequest<List
 // User management (admin staff administration)
 // ════════════════════════════════════════════════════════════════
 
-/// <summary>Paged list of all packages (admin pricing manager).</summary>
-public sealed record GetAdminPackagesQuery(int Page = 1, int PageSize = 20) : IRequest<AdminPackageListResponse>;
-
-public sealed record AdminPackageListResponse(
-    int Page, int PageSize, int TotalCount, List<AdminPackageRow> Items);
-
 /// <summary>Paged user list with role filter and search (name/email) — user manager page.</summary>
 public sealed record GetAdminUsersQuery(
     int Page = 1,

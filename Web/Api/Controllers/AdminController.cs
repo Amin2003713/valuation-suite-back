@@ -4,6 +4,7 @@ using ApiFramework.Controller;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace Web.Api.Controllers;
 
@@ -15,7 +16,9 @@ namespace Web.Api.Controllers;
 [ApiController]
 [Route("api/admin")]
 [Authorize]
-public class AdminController(IMediator mediator) : ControllerBase
+public class AdminController(
+    IMediator mediator,
+    Application.Interfaces.Base.IQueryRepository<Domain.Tools.ToolForm> toolForms) : ControllerBase
 {
     /// <summary>KPI dashboard — totals, revenue, tool usage, recent signups.</summary>
     [HttpGet("dashboard")]
@@ -72,6 +75,20 @@ public class AdminController(IMediator mediator) : ControllerBase
     [Authorize(Policy = "perm:dashboard.view")]
     public async Task<IActionResult> Tools(CancellationToken ct)
         => Ok(await mediator.Send(new GetAdminToolsQuery(), ct));
+
+    /// <summary>Tool price list for the pricing builder (advanced/advice Toman).</summary>
+    [HttpGet("tools/prices")]
+    [Authorize(Policy = "perm:access.manage")]
+    public async Task<IActionResult> ToolPrices(CancellationToken ct)
+    {
+        var forms = await toolForms.TableNoTracking.OrderBy(t => t.SortOrder).ToListAsync(ct);
+        return Ok(forms.Select(t => new
+        {
+            t.ToolCode, t.Title,
+            AdvancedPriceToman = t.AdvancedPriceToman,
+            AdvicePriceToman = t.AdvicePriceToman,
+        }).OrderBy(x => x.ToolCode).ToList());
+    }
 
     /// <summary>Paged company list with member/revenue aggregates.</summary>
     [HttpGet("companies")]
@@ -192,6 +209,15 @@ public class AdminController(IMediator mediator) : ControllerBase
     [Authorize(Policy = "perm:access.manage")]
     public async Task<IActionResult> DeletePackage(Guid id, CancellationToken ct)
         => Ok(await mediator.Send(new DeleteAdminPackageCommand(id), ct));
+
+    /// <summary>List packages (paged).</summary>
+    [HttpGet("packages")]
+    [Authorize(Policy = "perm:access.manage")]
+    public async Task<IActionResult> Packages(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        CancellationToken ct = default)
+        => Ok(await mediator.Send(new GetAdminPackagesQuery(page, pageSize), ct));
 
     /// <summary>Create or update an access package.</summary>
     [HttpPut("packages/{id:guid}")]

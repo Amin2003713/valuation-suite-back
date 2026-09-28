@@ -20,18 +20,15 @@ public sealed class GetAdminPackagesQueryHandler(ICommandRepository<AccessPackag
 {
     public async Task<AdminPackageListResponse> Handle(GetAdminPackagesQuery request, CancellationToken ct)
     {
-        var (items, total) = await packages.TableNoTracking
-            .OrderBy(p => p.SortOrder)
-            .ThenBy(p => p.Name)
-            .Skip((request.Page - 1) * request.PageSize)
-            .Take(request.PageSize)
-            .ToListAsync(ct);
+        var all = await packages.TableNoTracking.OrderBy(p => p.SortOrder).ThenBy(p => p.Name).ToListAsync(ct);
+        var total = all.Count;
+        var items = all.Skip((request.Page - 1) * request.PageSize).Take(request.PageSize).ToList();
 
         var list = items.Select(p => new AdminPackageRow(
             p.Id, p.Name, p.Description, p.PickCount,
             p.ToolCodes(), p.DurationDays, p.PriceToman, p.IsActive, p.SortOrder)).ToList();
 
-        return new AdminPackageListResponse(request.Page, request.PageSize, list.Count, list);
+        return new AdminPackageListResponse(request.Page, request.PageSize, total, list);
     }
 }
 

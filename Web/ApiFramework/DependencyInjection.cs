@@ -30,6 +30,12 @@ public static class DependencyInjection
         app.UseCors();
 
         app.MapControllers();
+
+        // Simple liveness/readiness probe for Docker / orchestrators.
+        app.MapGet("/health", () => Results.Ok(new { status = "healthy", timestamp = DateTime.UtcNow }))
+            .WithTags("health")
+            .ExcludeFromDescription();
+
         return app;
     }
 }
