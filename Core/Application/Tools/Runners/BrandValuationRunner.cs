@@ -246,6 +246,6 @@ public sealed class BrandValuationRunner : IToolRunner
     public sealed record FinalResult(List<FinalItem> Items, double WeightSum, double Hybrid);
     public sealed record BrandResult(
         StrengthResult Scorecard, StrengthResult Legal, RoyaltyResult Royalty, ForecastResult Forecast,
-        RfrResult Rfr, PremiumProfitResult PremiumProfit, IcfResult Icf, ScenResult Scen, McResult Mc,
+        RfrResult Rfr, PremiumProfitResult Pp, IcfResult Icf, ScenResult Scen, McResult Mc,
         List<TornadoRow> Tornado, FinalResult Final);
 }

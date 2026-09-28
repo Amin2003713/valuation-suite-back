@@ -16,12 +16,18 @@ public sealed class TrademarkValuationRunner : IToolRunner
     public ToolRunOutcome Run(JsonElement input)
     {
         var s = ToolInput.Bind<TrademarkInput>(input);
+        var loc = new ToolLocalization(s.Lang);
 
         var pastLife        = YearsBetween(s.RegDate, s.EvalDate);
         var remainingLife   = Math.Max(1,   Math.Min(10, s.TermYears));
         var legalRiskFactor = Math.Max(0.5, 1 - s.LegalRisk / 10.0);
         var territoryFactor = 1 + 0.15 * (s.IntlTerritory ? 1 : 0) + 0.05 * (s.Renewable ? 1 : 0);
-        var useFactor       = s.UseStatus switch { "فعال" => 1.0, "در حال توسعه" => 0.8, _ => 0.5 };
+
+        // Canonical status code (accepts legacy Persian values and English ones),
+        // then localized label back into the result.
+        var statusCode = ToolLocalization.NormalizeUseStatus(s.UseStatus);
+        var useFactor  = statusCode switch { "active" => 1.0, "developing" => 0.8, _ => 0.5 };
+        var useStatusLabel = loc.UseStatusLabel(statusCode);
 
         var sumFc          = s.Classes.Sum(c => c.Demand * c.Share);
         var sumF           = s.Classes.Sum(c => c.Share);
@@ -143,7 +149,7 @@ public sealed class TrademarkValuationRunner : IToolRunner
             marketValue, weightedTxn, weightedRoyalty, comparableEstimate,
             scoreTotal, scoreIndex, scorecardValue, scorecardCredibility,
             probWeightedValue, probSuccess, mcMean, Pct(0.1), Pct(0.5), Pct(0.9), mcResults,
-            finalValue, finalValue * 0.8, finalValue * 1.2);
+            finalValue, finalValue * 0.8, finalValue * 1.2, useStatusLabel);
 
         return new ToolRunOutcome(result, null, s.Name);
     }
@@ -160,6 +166,7 @@ public sealed class TrademarkValuationRunner : IToolRunner
     {
         public string? Name { get; set; }
         public string? Owner { get; set; }
+        public string? Lang { get; set; }
         public string? UseStatus { get; set; }
         public string? RegDate { get; set; }
         public string? EvalDate { get; set; }
@@ -279,5 +286,5 @@ public sealed class TrademarkValuationRunner : IToolRunner
         double ScoreTotal, double ScoreIndex, double ScorecardValue, double ScorecardCredibility,
         double ProbWeightedValue, double ProbSuccess, double McMean, double McP10, double McP50, double McP90,
         [property: JsonPropertyName("mcResults")] double[] McResults,
-        double FinalValue, double Conservative, double Optimistic);
+        double FinalValue, double Conservative, double Optimistic, string UseStatusLabel);
 }

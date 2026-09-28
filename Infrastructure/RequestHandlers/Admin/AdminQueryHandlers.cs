@@ -1,7 +1,9 @@
 using Application.Admin;
 using Application.Interfaces;
+using Application.Tools;
 using Common.Exceptions;
 using MediatR;
+using Microsoft.EntityFrameworkCore;
 
 namespace RequestHandlers.Admin;
 
@@ -11,6 +13,39 @@ public sealed class GetAdminDashboardQueryHandler(IAdminQueryRepository repo)
 {
     public Task<AdminDashboardResponse> Handle(GetAdminDashboardQuery request, CancellationToken ct)
         => repo.GetDashboardAsync(ct);
+}
+
+public sealed class GetAdminPackagesQueryHandler(ICommandRepository<AccessPackage> packages)
+    : IRequestHandler<GetAdminPackagesQuery, AdminPackageListResponse>
+{
+    public async Task<AdminPackageListResponse> Handle(GetAdminPackagesQuery request, CancellationToken ct)
+    {
+        var (items, total) = await packages.TableNoTracking
+            .OrderBy(p => p.SortOrder)
+            .ThenBy(p => p.Name)
+            .Skip((request.Page - 1) * request.PageSize)
+            .Take(request.PageSize)
+            .ToListAsync(ct);
+
+        var list = items.Select(p => new AdminPackageRow(
+            p.Id, p.Name, p.Description, p.PickCount,
+            p.ToolCodes(), p.DurationDays, p.PriceToman, p.IsActive, p.SortOrder)).ToList();
+
+        return new AdminPackageListResponse(request.Page, request.PageSize, list.Count, list);
+    }
+}
+
+public sealed class DeleteAdminPackageCommandHandler(ICommandRepository<AccessPackage> packages)
+    : IRequestHandler<DeleteAdminPackageCommand, Guid>
+{
+    public async Task<Guid> Handle(DeleteAdminPackageCommand request, CancellationToken ct)
+    {
+        var pkg = await packages.Table.FirstOrDefaultAsync(p => p.Id == request.Id, ct)
+            ?? throw ValuationException.NotFound("بسته یافت نشد.");
+        pkg.IsActive = false;
+        await packages.SaveChangesAsync(ct);
+        return pkg.Id;
+    }
 }
 
 public sealed class GetAdminCustomersQueryHandler(IAdminQueryRepository repo)
@@ -68,6 +103,19 @@ public sealed class GetAdminCompaniesQueryHandler(IAdminQueryRepository repo)
             Math.Max(1, request.Page), Math.Clamp(request.PageSize, 1, 100), request.Search, ct);
 
         return new AdminCompanyListResponse(request.Page, Math.Clamp(request.PageSize, 1, 100), total, items);
+    }
+}
+
+public sealed class GetAdminUsersQueryHandler(IAdminQueryRepository repo)
+    : IRequestHandler<GetAdminUsersQuery, AdminUserListResponse>
+{
+    public async Task<AdminUserListResponse> Handle(GetAdminUsersQuery request, CancellationToken ct)
+    {
+        var (items, total) = await repo.GetUsersAsync(
+            Math.Max(1, request.Page), Math.Clamp(request.PageSize, 1, 100),
+            request.Search, request.Role, ct);
+
+        return new AdminUserListResponse(request.Page, Math.Clamp(request.PageSize, 1, 100), total, items);
     }
 }
 

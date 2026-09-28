@@ -35,6 +35,12 @@ public sealed record GetAdminSubmissionsQuery(
     string? Search = null,
     Guid? UserId = null) : IRequest<AdminSubmissionListResponse>;
 
+/// <summary>All packages (pricing manager) — read + delete.</summary>
+public sealed record GetAdminPackagesQuery(int Page = 1, int PageSize = 20) : IRequest<AdminPackageListResponse>;
+
+/// <summary>Deletes a package (soft: marks inactive).</summary>
+public sealed record DeleteAdminPackageCommand(Guid Id) : IRequest<Guid>;
+
 /// <summary>Full tool catalog with usage stats (for the tools management page).</summary>
 public sealed record GetAdminToolsQuery : IRequest<List<AdminToolRow>>;
 
@@ -94,11 +100,69 @@ public sealed record AddSubmissionNoteCommand(
     Guid SubmissionId, string? Text, string? AudioBase64, string? AudioMimeType, int? AudioSeconds)
     : IRequest<AdminNoteRow>;
 
-/// <summary>Notes for one submission (adviser view + customer delivery).</summary>
+/// <summary>Customer follow-up question in the advice chat (advice must be paid).</summary>
+public sealed record AddCustomerReplyCommand(Guid SubmissionId, string? Text) : IRequest<AdminNoteRow>;
+
+/// <summary>Full advice thread for one submission (adviser view + customer delivery).</summary>
 public sealed record GetSubmissionNotesQuery(Guid SubmissionId) : IRequest<List<AdminNoteRow>>;
 
-/// <summary>Submissions that await an adviser note (paid advice, no note yet).</summary>
+/// <summary>
+///     Submissions with a paid advice purchase — new ones (no messages yet) plus
+///     open threads (customer replied after the last staff message). Answered
+///     threads stay reachable via the customer/admin submission views.
+/// </summary>
 public sealed record GetAdviserQueueQuery : IRequest<List<AdminSubmissionRow>>;
 
-/// <summary>Customer fetches (and marks seen) the adviser notes on their own submission.</summary>
-public sealed record GetMySubmissionNotesQuery(Guid SubmissionId) : IRequest<List<AdminNoteRow>>;
+/// <summary>
+///     Customer fetches (and marks seen) the full advice thread on their own
+///     submission, plus whether the advice was purchased and a reply is allowed.
+/// </summary>
+public sealed record GetMySubmissionNotesQuery(Guid SubmissionId) : IRequest<MyAdviceThreadResponse>;
+
+/// <summary>
+///     The customer's most recent advice thread for a tool (their latest submission
+///     that has any note or a paid advice payment). Lets the chat survive reloads
+///     for auto-computing calculator pages, which create fresh submissions.
+/// </summary>
+public sealed record GetMyToolAdviceThreadQuery(string ToolCode) : IRequest<MyAdviceThreadResponse?>;
+
+// ════════════════════════════════════════════════════════════════
+// Tool content management (editable questions/labels) + company members
+// ════════════════════════════════════════════════════════════════
+
+/// <summary>Editable question list of one tool (falls back to seed content).</summary>
+public sealed record GetAdminToolQuestionsQuery(string ToolCode) : IRequest<List<AdminQuestionRow>>;
+
+/// <summary>Edits one question's text and/or option labels.</summary>
+public sealed record UpdateAdminToolQuestionCommand(
+    string ToolCode, string QuestionId, string? Text, List<QuestionOptionRow>? Options) : IRequest<AdminQuestionRow>;
+
+/// <summary>Updates tool-level editable fields (title; description optional).</summary>
+public sealed record UpdateAdminToolCommand(string ToolCode, string? Title, string? Description) : IRequest<AdminToolRow>;
+
+/// <summary>Members of one company (admin "see members" modal).</summary>
+public sealed record GetAdminCompanyMembersQuery(Guid CompanyId) : IRequest<List<AdminCompanyMemberRow>>;
+
+// ════════════════════════════════════════════════════════════════
+// User management (admin staff administration)
+// ════════════════════════════════════════════════════════════════
+
+/// <summary>Paged list of all packages (admin pricing manager).</summary>
+public sealed record GetAdminPackagesQuery(int Page = 1, int PageSize = 20) : IRequest<AdminPackageListResponse>;
+
+public sealed record AdminPackageListResponse(
+    int Page, int PageSize, int TotalCount, List<AdminPackageRow> Items);
+
+/// <summary>Paged user list with role filter and search (name/email) — user manager page.</summary>
+public sealed record GetAdminUsersQuery(
+    int Page = 1,
+    int PageSize = 20,
+    string? Search = null,
+    string? Role = null) : IRequest<AdminUserListResponse>;
+
+/// <summary>Creates a staff user (admin/support/analyst/adviser) with an initial password.</summary>
+public sealed record CreateAdminUserCommand(
+    string Name, string Email, string Password, List<string> Roles) : IRequest<AdminUserRow>;
+
+/// <summary>Sets granular permission overrides — reserved for fine-grained access.</summary>
+public sealed record SetAdminUserActiveCommand(Guid Id, bool IsActive) : IRequest;

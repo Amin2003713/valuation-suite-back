@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Http;
 using System.Security.Claims;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Application.Interfaces;
 using Application.Interfaces.Base;
 
 namespace RequestHandlers.Tools;
@@ -92,25 +93,42 @@ public sealed class RunToolCommandHandler(
     IToolRunnerResolver resolver,
     ICommandRepository<ToolSubmission> submissions,
     IEntitlementService entitlements,
-    ICurrentUserAccessor currentUser) : IRequestHandler<RunToolCommand, ToolRunResponse>
+    ICurrentUserAccessor currentUser,
+    IQueryRepository<Domain.Users.ApplicationUser> usersQueries) : IRequestHandler<RunToolCommand, ToolRunResponse>
 {
     public async Task<ToolRunResponse> Handle(RunToolCommand request, CancellationToken ct)
     {
         if (currentUser.UserId == Guid.Empty)
             throw Common.Exceptions.ValuationException.Forbidden("برای اجرای ابزار ابتدا وارد حساب خود شوید.");
 
-        var runner = resolver.Resolve(request.ToolCode);
-        var outcome = runner.Run(request.Input);
+        /* Run-on-behalf: when the body carries runFor (or the dedicated endpoint
+         * maps it), the submission is attributed to the target user when that
+         * user is a member of the target company; otherwise it stays with the
+         * caller and the context is preserved inside the stored input JSON. */
+        var runFor = request.RunFor ?? ExtractRunFor(request.Input);
+        var effectiveUserId = currentUser.UserId;
+        if (runFor is { } ctx)
+        {
+            if (ctx.UserId is { } targetUser && await BelongsToCompanyAsync(targetUser, ctx.CompanyId, ct))
+                effectiveUserId = targetUser;
+        }
 
-        var advancedIncluded = await entitlements.CanViewAdvancedAsync(currentUser.UserId, request.ToolCode, ct);
+        var inputForStorage = runFor is null
+            ? request.Input
+            : WithRunForRemoved(request.Input);
+
+        var runner = resolver.Resolve(request.ToolCode);
+        var outcome = runner.Run(inputForStorage);
+
+        var advancedIncluded = await entitlements.CanViewAdvancedAsync(effectiveUserId, request.ToolCode, ct);
         if (!advancedIncluded)
             outcome = outcome with { Result = AdvancedSections.Strip(outcome.Result) };
 
         var submission = ToolSubmission.Create(
-            currentUser.UserId,
+            effectiveUserId,
             request.ToolCode,
             outcome.Name,
-            JsonSerializer.Serialize(request.Input),
+            JsonSerializer.Serialize(WithRunForRemoved(request.Input)),
             JsonSerializer.Serialize(outcome.Result),
             outcome.OverallScore);
 
@@ -122,5 +140,56 @@ public sealed class RunToolCommandHandler(
             ToolInput.ToJsonElement(outcome.Result),
             outcome.OverallScore,
             advancedIncluded);
+    }
+
+    private async Task<bool> BelongsToCompanyAsync(Guid userId, Guid? companyId, CancellationToken ct)
+    {
+        if (userId == Guid.Empty)
+            return false;
+
+        var user = await usersQueries.TableNoTracking
+            .Where(u => u.Id == userId)
+            .Select(u => new { u.CompanyId })
+            .FirstOrDefaultAsync(ct);
+
+        if (user is null)
+            return false;
+
+        return companyId is null || companyId == Guid.Empty || user.CompanyId == companyId;
+    }
+
+    /// <summary>Reads runFor from the input body (client sends it inline) and removes it from the engine input.</summary>
+    private static RunForContext? ExtractRunFor(JsonElement input)
+    {
+        if (input.ValueKind != JsonValueKind.Object)
+            return null;
+
+        if (!input.TryGetProperty("runFor", out var el) || el.ValueKind != JsonValueKind.Object)
+            return null;
+
+        Guid? companyId = null, userId = null;
+        string? note = null;
+
+        if (el.TryGetProperty("companyId", out var c) && Guid.TryParse(c.GetString(), out var cid)) companyId = cid;
+        if (el.TryGetProperty("userId", out var u) && Guid.TryParse(u.GetString(), out var uid)) userId = uid;
+        if (el.TryGetProperty("note", out var n) && n.ValueKind == JsonValueKind.String) note = n.GetString();
+
+        if (companyId is null && userId is null && note is null)
+            return null;
+
+        return new RunForContext { CompanyId = companyId, UserId = userId, Note = note };
+    }
+
+    /// <summary>Strips the runFor envelope from the input before handing it to the math engine / storage.</summary>
+    private static JsonElement WithRunForRemoved(JsonElement input)
+    {
+        if (input.ValueKind != JsonValueKind.Object || !input.TryGetProperty("runFor", out _))
+            return input;
+
+        var node = System.Text.Json.Nodes.JsonNode.Parse(input.GetRawText());
+        if (node is System.Text.Json.Nodes.JsonObject obj)
+            obj.Remove("runFor");
+
+        return node?.Deserialize<JsonElement>() ?? input;
     }
 }

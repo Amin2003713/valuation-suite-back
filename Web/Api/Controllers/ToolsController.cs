@@ -34,6 +34,22 @@ public class ToolsController(IMediator mediator) : ControllerBase
         => Ok(await mediator.Send(new RunToolCommand { ToolCode = toolCode, Input = input }, ct));
 
     /// <summary>
+    ///     Runs a tool on behalf of a client/company (admin flow). The submission is
+    ///     attributed to the target user when they belong to the target company.
+    /// </summary>
+    [HttpPost("{toolCode}/run-for")]
+    [Authorize(Policy = "perm:submissions.read")]
+    public async Task<IActionResult> RunFor(string toolCode, [FromBody] RunForBody body, CancellationToken ct)
+        => Ok(await mediator.Send(new RunToolCommand
+        {
+            ToolCode = toolCode,
+            Input = body.Input,
+            RunFor = new RunForContext { CompanyId = body.CompanyId, UserId = body.UserId, Note = body.Note },
+        }, ct));
+
+    public sealed record RunForBody(JsonElement Input, Guid? CompanyId, Guid? UserId, string? Note);
+
+    /// <summary>
     ///     Freemium catalog: tool prices (basics free, advanced paid), packages and
     ///     the current user's access state. Powers the /pricing page.
     /// </summary>
@@ -49,10 +65,32 @@ public class ToolsController(IMediator mediator) : ControllerBase
         => Ok(await mediator.Send(new GetToolSubmissionsQuery { ToolCode = toolCode }, ct));
 
     /// <summary>
-    ///     Customer fetches the adviser notes on their own submission (marks them seen).
+    ///     The current user's latest advice thread for a tool (latest submission with
+    ///     notes or a paid advice payment) — keeps the chat visible across reloads.
+    ///     "me" is reserved and cannot collide with tool codes.
+    /// </summary>
+    [HttpGet("me/advice-thread/{toolCode}")]
+    [Authorize]
+    public async Task<IActionResult> MyToolAdviceThread(string toolCode, CancellationToken ct)
+        => Ok(await mediator.Send(new Application.Admin.GetMyToolAdviceThreadQuery(toolCode), ct));
+
+    /// <summary>
+    ///     Customer fetches the advice thread on their own submission (marks staff
+    ///     messages seen) together with entitlement info (purchased / can reply).
     /// </summary>
     [HttpGet("my-submissions/{submissionId:guid}/notes")]
     [Authorize]
     public async Task<IActionResult> MySubmissionNotes(Guid submissionId, CancellationToken ct)
         => Ok(await mediator.Send(new Application.Admin.GetMySubmissionNotesQuery(submissionId), ct));
+
+    /// <summary>
+    ///     Customer follow-up question in the advice chat (requires paid advice).
+    /// </summary>
+    [HttpPost("my-submissions/{submissionId:guid}/notes")]
+    [Authorize]
+    public async Task<IActionResult> ReplyToAdviser(
+        Guid submissionId, [FromBody] ReplyBody body, CancellationToken ct)
+        => Ok(await mediator.Send(new Application.Admin.AddCustomerReplyCommand(submissionId, body.Text), ct));
+
+    public sealed record ReplyBody(string? Text);
 }

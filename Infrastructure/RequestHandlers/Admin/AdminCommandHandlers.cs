@@ -138,3 +138,67 @@ public sealed class ResetAdminPasswordCommandHandler(UserManager<ApplicationUser
             throw ValuationException.BadRequest(string.Join(" | ", result.Errors.Select(e => e.Description)));
     }
 }
+
+/// <summary>
+///     Creates a staff user (Admin/Support/Analyst/Adviser) with an initial password.
+///     The first admin still comes from AdminBootstrap; this serves the user manager UI.
+/// </summary>
+public sealed class CreateAdminUserCommandHandler(UserManager<ApplicationUser> userManager)
+    : IRequestHandler<CreateAdminUserCommand, AdminUserRow>
+{
+    public async Task<AdminUserRow> Handle(CreateAdminUserCommand request, CancellationToken ct)
+    {
+        var email = request.Email.Trim().ToLowerInvariant();
+
+        if (await userManager.FindByEmailAsync(email) is not null)
+            throw ValuationException.Conflict("این ایمیل قبلاً ثبت شده است.");
+
+        if (request.Roles.Count == 0)
+            throw ValuationException.BadRequest("حداقل یک نقش انتخاب کنید.");
+
+        var valid = request.Roles
+            .Where(r => AdminRoles.All.Contains(r, StringComparer.Ordinal))
+            .Distinct()
+            .ToList();
+        if (valid.Count == 0)
+            throw ValuationException.BadRequest("هیچ نقش معتبری انتخاب نشده است.");
+
+        var user = new ApplicationUser
+        {
+            UserName = email,
+            Email = email,
+            DisplayName = request.Name.Trim(),
+            Plan = Domain.Companies.Plan.Free,
+            IsActive = true,
+        };
+
+        var create = await userManager.CreateAsync(user, request.Password);
+        if (!create.Succeeded)
+            throw ValuationException.BadRequest(string.Join(" | ", create.Errors.Select(e => e.Description)));
+
+        var add = await userManager.AddToRolesAsync(user, valid);
+        if (!add.Succeeded)
+            throw ValuationException.BadRequest(string.Join(" | ", add.Errors.Select(e => e.Description)));
+
+        return new AdminUserRow(
+            user.Id, user.DisplayName, email, user.Plan.ToString(), user.IsActive,
+            user.CreatedAt, user.LastLoginAt, valid,
+            RolePermissions.For(valid).ToList(), 0);
+    }
+}
+
+/// <summary>Activates/deactivates a user account (user manager quick action).</summary>
+public sealed class SetAdminUserActiveCommandHandler(
+    ICommandRepository<ApplicationUser> users)
+    : IRequestHandler<SetAdminUserActiveCommand>
+{
+    public async Task Handle(SetAdminUserActiveCommand request, CancellationToken ct)
+    {
+        var user = await users.Table
+            .FirstOrDefaultAsync(u => u.Id == request.Id, ct)
+            ?? throw ValuationException.NotFound("کاربر یافت نشد.");
+
+        user.IsActive = request.IsActive;
+        await users.SaveChangesAsync(ct);
+    }
+}

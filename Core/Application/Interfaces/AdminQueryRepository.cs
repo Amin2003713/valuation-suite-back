@@ -45,4 +45,8 @@ public interface IAdminQueryRepository
     Task<AdminAnalyticsResponse> GetAnalyticsAsync(CancellationToken ct = default);
     Task<List<AdminGrantRow>> GetGrantsAsync(Guid? userId, CancellationToken ct = default);
     Task<List<AdminSubmissionRow>> GetAdviserQueueAsync(CancellationToken ct = default);
+
+    // ── User manager ──
+    Task<(List<AdminUserRow> Items, int TotalCount)> GetUsersAsync(
+        int page, int pageSize, string? search, string? role, CancellationToken ct = default);
 }

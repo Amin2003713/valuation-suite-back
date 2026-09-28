@@ -92,6 +92,35 @@ public class AdminController(IMediator mediator) : ControllerBase
         return NoContent();
     }
 
+    // ─── User manager (staff administration) ───
+
+    /// <summary>Paged user list with role filter and search — user manager page.</summary>
+    [HttpGet("users")]
+    [Authorize(Policy = "perm:customers.read")]
+    public async Task<IActionResult> Users(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        [FromQuery] string? search = null,
+        [FromQuery] string? role = null,
+        CancellationToken ct = default)
+        => Ok(await mediator.Send(new GetAdminUsersQuery(page, pageSize, search, role), ct));
+
+    /// <summary>Creates a staff user (Admin/Support/Analyst/Adviser) with an initial password.</summary>
+    [HttpPost("users")]
+    [Authorize(Roles = "Admin")]
+    [Authorize(Policy = "perm:customers.manage")]
+    public async Task<IActionResult> CreateUser([FromBody] CreateUserRequest request, CancellationToken ct)
+        => Ok(await mediator.Send(new CreateAdminUserCommand(request.Name, request.Email, request.Password, request.Roles), ct));
+
+    /// <summary>Activates/deactivates a user account.</summary>
+    [HttpPut("users/{id:guid}/active")]
+    [Authorize(Policy = "perm:customers.manage")]
+    public async Task<IActionResult> SetUserActive(Guid id, [FromBody] SetUserActiveRequest request, CancellationToken ct)
+    {
+        await mediator.Send(new SetAdminUserActiveCommand(id, request.IsActive), ct);
+        return NoContent();
+    }
+
     /// <summary>CSV export of the payments ledger.</summary>
     [HttpGet("payments/export")]
     [Authorize(Policy = "perm:payments.read")]
@@ -158,6 +187,12 @@ public class AdminController(IMediator mediator) : ControllerBase
         return NoContent();
     }
 
+    /// <summary>Delete a package (marks inactive).</summary>
+    [HttpDelete("packages/{id:guid}")]
+    [Authorize(Policy = "perm:access.manage")]
+    public async Task<IActionResult> DeletePackage(Guid id, CancellationToken ct)
+        => Ok(await mediator.Send(new DeleteAdminPackageCommand(id), ct));
+
     /// <summary>Create or update an access package.</summary>
     [HttpPut("packages/{id:guid}")]
     [Authorize(Policy = "perm:access.manage")]
@@ -174,7 +209,7 @@ public class AdminController(IMediator mediator) : ControllerBase
             null, request.Name, request.Description, request.PickCount,
             request.ToolCodes, request.DurationDays, request.PriceToman, request.IsActive, request.SortOrder), ct));
 
-    /// <summary>Submissions awaiting an adviser note (paid advice, no note yet).</summary>
+    /// <summary>Advice threads: new purchases plus open conversations (customer replied last).</summary>
     [HttpGet("adviser-queue")]
     [Authorize(Policy = "perm:notes.write")]
     public async Task<IActionResult> AdviserQueue(CancellationToken ct)
@@ -193,10 +228,42 @@ public class AdminController(IMediator mediator) : ControllerBase
     public async Task<IActionResult> Notes(Guid id, CancellationToken ct)
         => Ok(await mediator.Send(new GetSubmissionNotesQuery(id), ct));
 
+    // ─── Tool content management (editable titles / question texts / option labels) ───
+
+    /// <summary>Editable question rows of one tool (texts + option labels).</summary>
+    [HttpGet("tools/{code}/questions")]
+    [Authorize(Policy = "perm:submissions.read")]
+    public async Task<IActionResult> ToolQuestions(string code, CancellationToken ct)
+        => Ok(await mediator.Send(new GetAdminToolQuestionsQuery(code), ct));
+
+    /// <summary>Rename a question and/or its option labels.</summary>
+    [HttpPut("tools/{code}/questions/{questionId}")]
+    [Authorize(Policy = "perm:customers.manage")]
+    public async Task<IActionResult> UpdateToolQuestion(
+        string code, string questionId, [FromBody] UpdateQuestionRequest request, CancellationToken ct)
+        => Ok(await mediator.Send(new UpdateAdminToolQuestionCommand(
+            code, questionId, request.Text, request.Options), ct));
+
+    /// <summary>Tool-level fields: title / description.</summary>
+    [HttpPut("tools/{code}")]
+    [Authorize(Policy = "perm:customers.manage")]
+    public async Task<IActionResult> UpdateTool(string code, [FromBody] UpdateToolRequest request, CancellationToken ct)
+        => Ok(await mediator.Send(new UpdateAdminToolCommand(code, request.Title, request.Description), ct));
+
+    /// <summary>Members of one company ("see members" modal).</summary>
+    [HttpGet("companies/{id:guid}/members")]
+    [Authorize(Policy = "perm:customers.read")]
+    public async Task<IActionResult> CompanyMembers(Guid id, CancellationToken ct)
+        => Ok(await mediator.Send(new GetAdminCompanyMembersQuery(id), ct));
+
+    public sealed record UpdateQuestionRequest(string? Text, List<QuestionOptionRow>? Options);
+    public sealed record UpdateToolRequest(string? Title, string? Description);
+
     public sealed record SetRolesRequest(List<string> Roles);
     public sealed record GrantRequest(Guid UserId, string ToolCode, int? Days);
     public sealed record PackageRequest(
         string Name, string? Description, int? PickCount, List<string> ToolCodes,
         int? DurationDays, long PriceToman, bool IsActive, int SortOrder);
     public sealed record AddNoteRequest(string? Text, string? AudioBase64, string? AudioMimeType, int? AudioSeconds);
+    public sealed record SetUserActiveRequest(bool IsActive);
 }

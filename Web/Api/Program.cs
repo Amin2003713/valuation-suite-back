@@ -130,6 +130,9 @@ public class Program
                 await Application.Tools.Seeding.ToolFormsSeeder.SeedAsync(
                     scope.ServiceProvider.GetRequiredService<Application.Tools.Seeding.IToolFormsDbContext>(), logger);
 
+                await Application.Tools.Seeding.ToolQuestionsSeeder.SeedAsync(
+                    scope.ServiceProvider.GetRequiredService<Application.Tools.Seeding.IToolFormsDbContext>(), logger);
+
                 await scope.ServiceProvider.GetRequiredService<Application.Admin.AdminBootstrapper>().RunAsync();
             }
             catch (Exception ex)

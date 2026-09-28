@@ -1,6 +1,7 @@
 using Application.Admin;
 using Application.Interfaces;
 using Common.Exceptions;
+using Domain.Payments;
 using Domain.Tools;
 using Domain.Users;
 using MediatR;
@@ -137,29 +138,92 @@ public sealed class AddSubmissionNoteCommandHandler(
     }
 }
 
-public sealed class GetSubmissionNotesQueryHandler(IQueryRepository<SubmissionNote> notes)
-    : IRequestHandler<GetSubmissionNotesQuery, List<AdminNoteRow>>
+/// <summary>
+///     Customer follow-up in the advice chat. Requires the advice to have been
+///     paid for and ownership of the submission. Text-only (voice stays staff-side).
+/// </summary>
+public sealed class AddCustomerReplyCommandHandler(
+    ICommandRepository<SubmissionNote> notes,
+    IQueryRepository<ToolSubmission> submissions,
+    IQueryRepository<Payment> payments,
+    ICurrentUserAccessor currentUser)
+    : IRequestHandler<AddCustomerReplyCommand, AdminNoteRow>
 {
-    public Task<List<AdminNoteRow>> Handle(GetSubmissionNotesQuery request, CancellationToken ct)
-        => notes.TableNoTracking
-            .Where(n => n.SubmissionId == request.SubmissionId)
-            .OrderBy(n => n.CreatedAt)
-            .Select(n => new AdminNoteRow(
-                n.Id, n.SubmissionId, n.Text, n.AudioBase64, n.AudioMimeType, n.AudioSeconds,
-                n.SeenByCustomer, n.CreatedAt))
-            .ToListAsync(ct);
+    public async Task<AdminNoteRow> Handle(AddCustomerReplyCommand request, CancellationToken ct)
+    {
+        var userId = currentUser.UserId;
+        if (userId == Guid.Empty)
+            throw ValuationException.Forbidden("دسترسی غیرمجاز.");
+
+        if (string.IsNullOrWhiteSpace(request.Text))
+            throw ValuationException.BadRequest("متن پیام الزامی است.");
+
+        var sub = await submissions.TableNoTracking
+            .FirstOrDefaultAsync(s => s.Id == request.SubmissionId, ct)
+            ?? throw ValuationException.NotFound("پاسخ یافت نشد.");
+
+        if (sub.UserId != userId)
+            throw ValuationException.Forbidden("این ارزیابی متعلق به شما نیست.");
+
+        var paid = await payments.TableNoTracking.AnyAsync(
+            p => p.UserId == userId && p.SubmissionId == sub.Id &&
+                 p.Kind == PaymentKind.Advice && p.Status == PaymentStatus.Paid, ct);
+        if (!paid)
+            throw ValuationException.Forbidden("برای گفتگو ابتدا بررسی کارشناسی را خریداری کنید.");
+
+        var note = SubmissionNote.CreateCustomerReply(request.SubmissionId, userId, request.Text.Trim());
+        await notes.AddAsync(note, ct, saveNow: true);
+
+        return new AdminNoteRow(note.Id, note.SubmissionId, note.Text, null, null, null, true, note.CreatedAt,
+            AuthorIsCustomer: true, SeenByAdviser: false);
+    }
 }
 
 /// <summary>
-///     Customer-side: marks the notes on their own submission as seen and returns them.
+///     Full thread for one submission (adviser view). Opening it marks unseen
+///     customer replies as read so the adviser's unread badge clears.
+/// </summary>
+public sealed class GetSubmissionNotesQueryHandler(ICommandRepository<SubmissionNote> notes)
+    : IRequestHandler<GetSubmissionNotesQuery, List<AdminNoteRow>>
+{
+    public async Task<List<AdminNoteRow>> Handle(GetSubmissionNotesQuery request, CancellationToken ct)
+    {
+        var list = await notes.TableNoTracking
+            .Where(n => n.SubmissionId == request.SubmissionId)
+            .OrderBy(n => n.CreatedAt)
+            .ToListAsync(ct);
+
+        var unseenReplies = list.Where(n => n.AuthorIsCustomer && !n.SeenByAdviser).ToList();
+        if (unseenReplies.Count > 0)
+        {
+            // Re-attach the tracked instances so the flag change persists.
+            foreach (var id in unseenReplies.Select(n => n.Id))
+            {
+                var tracked = await notes.Table.FirstOrDefaultAsync(n => n.Id == id, ct);
+                tracked?.MarkSeenByAdviser();
+            }
+            await notes.SaveChangesAsync(ct);
+        }
+
+        return list.Select(n => new AdminNoteRow(
+            n.Id, n.SubmissionId, n.Text, n.AudioBase64, n.AudioMimeType, n.AudioSeconds,
+            n.SeenByCustomer, n.CreatedAt, n.AuthorIsCustomer, n.SeenByAdviser || unseenReplies.Any(u => u.Id == n.Id)))
+            .ToList();
+    }
+}
+
+/// <summary>
+///     Customer-side: marks staff messages on their own submission as seen and
+///     returns the whole thread plus entitlement (purchased / can reply).
 /// </summary>
 public sealed class GetMySubmissionNotesQueryHandler(
     IQueryRepository<ToolSubmission> submissions,
     ICommandRepository<SubmissionNote> notes,
+    IQueryRepository<Payment> payments,
     ICurrentUserAccessor currentUser)
-    : IRequestHandler<GetMySubmissionNotesQuery, List<AdminNoteRow>>
+    : IRequestHandler<GetMySubmissionNotesQuery, MyAdviceThreadResponse>
 {
-    public async Task<List<AdminNoteRow>> Handle(GetMySubmissionNotesQuery request, CancellationToken ct)
+    public async Task<MyAdviceThreadResponse> Handle(GetMySubmissionNotesQuery request, CancellationToken ct)
     {
         var userId = currentUser.UserId;
         if (userId == Guid.Empty)
@@ -177,11 +241,83 @@ public sealed class GetMySubmissionNotesQueryHandler(
             .OrderBy(n => n.CreatedAt)
             .ToListAsync(ct);
 
-        foreach (var n in list.Where(n => !n.SeenByCustomer))
-            n.MarkSeen();
-        await notes.SaveChangesAsync(ct);
+        // Persist read receipts on tracked instances (no-tracking list is detached,
+        // so mutating it alone would silently never save).
+        var unseen = list.Where(n => !n.AuthorIsCustomer && !n.SeenByCustomer).ToList();
+        if (unseen.Count > 0)
+        {
+            foreach (var id in unseen.Select(n => n.Id))
+            {
+                var tracked = await notes.Table.FirstOrDefaultAsync(n => n.Id == id, ct);
+                tracked?.MarkSeen();
+            }
+            await notes.SaveChangesAsync(ct);
+        }
 
-        return list.Select(n => new AdminNoteRow(
-            n.Id, n.SubmissionId, n.Text, n.AudioBase64, n.AudioMimeType, n.AudioSeconds, true, n.CreatedAt)).ToList();
+        var paid = await payments.TableNoTracking.AnyAsync(
+            p => p.UserId == userId && p.SubmissionId == request.SubmissionId &&
+                 p.Kind == PaymentKind.Advice && p.Status == PaymentStatus.Paid, ct);
+
+        return new MyAdviceThreadResponse(
+            request.SubmissionId,
+            list.Select(n => new AdminNoteRow(
+                n.Id, n.SubmissionId, n.Text, n.AudioBase64, n.AudioMimeType, n.AudioSeconds,
+                true, n.CreatedAt, n.AuthorIsCustomer, n.SeenByAdviser)).ToList(),
+            paid, paid);
+    }
+}
+
+/// <summary>
+///     The customer's most recent advice thread for a tool: their latest submission
+///     that has a note or a paid advice payment. Null when none exists — the client
+///     then simply renders nothing instead of an empty buy box.
+/// </summary>
+public sealed class GetMyToolAdviceThreadQueryHandler(
+    IQueryRepository<ToolSubmission> submissions,
+    IQueryRepository<SubmissionNote> notes,
+    IQueryRepository<Payment> payments,
+    ICurrentUserAccessor currentUser)
+    : IRequestHandler<GetMyToolAdviceThreadQuery, MyAdviceThreadResponse?>
+{
+    public async Task<MyAdviceThreadResponse?> Handle(GetMyToolAdviceThreadQuery request, CancellationToken ct)
+    {
+        var userId = currentUser.UserId;
+        if (userId == Guid.Empty)
+            throw ValuationException.Forbidden("دسترسی غیرمجاز.");
+
+        var subIds = await submissions.TableNoTracking
+            .Where(s => s.UserId == userId && s.ToolCode == request.ToolCode)
+            .OrderByDescending(s => s.CreatedAt)
+            .Select(s => s.Id)
+            .ToListAsync(ct);
+        if (subIds.Count == 0) return null;
+
+        var paidSubIds = await payments.TableNoTracking
+            .Where(p => p.UserId == userId && p.Kind == PaymentKind.Advice &&
+                        p.Status == PaymentStatus.Paid && p.SubmissionId != null && subIds.Contains(p.SubmissionId.Value))
+            .Select(p => p.SubmissionId!.Value)
+            .ToListAsync(ct);
+
+        var latest =
+            paidSubIds.Count > 0
+                ? subIds.FirstOrDefault(id => paidSubIds.Contains(id))
+                : subIds.FirstOrDefault(id => notes.TableNoTracking.Any(n => n.SubmissionId == id));
+
+        if (latest == Guid.Empty) return null;
+        var subId = latest;
+
+        var list = await notes.TableNoTracking
+            .Where(n => n.SubmissionId == subId)
+            .OrderBy(n => n.CreatedAt)
+            .ToListAsync(ct);
+
+        var paid = paidSubIds.Contains(subId);
+
+        return new MyAdviceThreadResponse(
+            subId,
+            list.Select(n => new AdminNoteRow(
+                n.Id, n.SubmissionId, n.Text, n.AudioBase64, n.AudioMimeType, n.AudioSeconds,
+                true, n.CreatedAt, n.AuthorIsCustomer, n.SeenByAdviser)).ToList(),
+            paid, paid);
     }
 }

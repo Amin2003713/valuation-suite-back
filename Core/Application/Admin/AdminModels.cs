@@ -58,7 +58,7 @@ public sealed record AdminPaymentRow(
 public sealed record AdminSubmissionRow(
     Guid Id, Guid UserId, string UserEmail, string ToolCode, string? Name, double? OverallScore,
     JsonElement Input, JsonElement Result, DateTime CreatedAt,
-    bool HasNotes, int UnreadNotes);
+    bool HasNotes, int UnreadNotes, bool AwaitingReply = true);
 
 public sealed record AdminSubmissionListResponse(
     int Page, int PageSize, int TotalCount, List<AdminSubmissionRow> Items);
@@ -86,9 +86,13 @@ public sealed record AdminPackageRow(
     Guid Id, string Name, string? Description, int? PickCount,
     List<string> ToolCodes, int? DurationDays, long PriceToman, bool IsActive, int SortOrder);
 
+public sealed record AdminPackageListResponse(
+    int Page, int PageSize, int TotalCount, List<AdminPackageRow> Items);
+
 public sealed record AdminNoteRow(
     Guid Id, Guid SubmissionId, string? Text, string? AudioBase64, string? AudioMimeType,
-    int? AudioSeconds, bool SeenByCustomer, DateTime CreatedAt);
+    int? AudioSeconds, bool SeenByCustomer, DateTime CreatedAt,
+    bool AuthorIsCustomer = false, bool SeenByAdviser = false);
 
 /// <summary>Chart-ready analytics (visual reporting — no raw JSON).</summary>
 public sealed record AdminAnalyticsResponse(
@@ -113,3 +117,37 @@ public sealed record UpdateCustomerRequest(
     string? DisplayName, string? Plan, DateTime? PlanExpiresAt, bool? IsActive);
 
 public sealed record ResetPasswordRequest(string NewPassword);
+
+public sealed record CreateUserRequest(string Name, string Email, string Password, List<string> Roles);
+public sealed record SetUserActiveRequest(bool IsActive);
+
+// ─── User manager read models ───────────────────────────────────────
+
+public sealed record AdminUserRow(
+    Guid Id, string? Name, string Email, string Plan, bool IsActive,
+    DateTime CreatedAt, DateTime? LastLoginAt, List<string> Roles,
+    List<string> Perms, long Submissions);
+
+public sealed record AdminUserListResponse(
+    int Page, int PageSize, int TotalCount, List<AdminUserRow> Items);
+
+/// <summary>Customer-side advice thread: messages + entitlement to reply.</summary>
+public sealed record MyAdviceThreadResponse(
+    Guid SubmissionId,
+    List<AdminNoteRow> Notes,
+    bool AdvicePurchased,
+    bool CanReply);
+
+// ─── Tool content management + company members ──────────────────────
+
+/// <summary>One editable option row of a question.</summary>
+public sealed record QuestionOptionRow(string Value, string Label);
+
+/// <summary>Editable question row (text + option labels) for the admin tools editor.</summary>
+public sealed record AdminQuestionRow(
+    string Id, string? SectionKey, string? SectionTitle, string Text, List<QuestionOptionRow> Options);
+
+/// <summary>Member of a company (admin "see members" modal).</summary>
+public sealed record AdminCompanyMemberRow(
+    Guid Id, string? Name, string Email, string Plan, bool IsActive,
+    long Submissions, long PaidTotal, DateTime CreatedAt, DateTime? LastLoginAt);

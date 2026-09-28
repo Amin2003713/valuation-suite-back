@@ -42,6 +42,7 @@ public static class ToolRunnerRegistration
         services.AddSingleton<IToolRunner, IntangibleAssetsRunner>(sp => sp.GetRequiredService<IntangibleAssetsRunner>());
         services.AddSingleton<KnowhowValuationRunner>();
         services.AddSingleton<IToolRunner, KnowhowValuationRunner>(sp => sp.GetRequiredService<KnowhowValuationRunner>());
+        services.AddSingleton<IToolRunner, IconScorecardRunner>();
 
         services.AddSingleton<IToolRunnerResolver, ToolRunnerResolver>();
         return services;

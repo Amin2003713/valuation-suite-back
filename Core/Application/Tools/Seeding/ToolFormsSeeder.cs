@@ -62,6 +62,7 @@ public static class ToolFormsSeeder
             ["PHARMA-IP"] = (120_000, 300_000, "pharma-ip-valuation"),
             ["INTANGIBLE"] = (100_000, 250_000, "intangible-assets"),
             ["KNOWHOW"] = (100_000, 250_000, "knowhow-valuation"),
+            ["ICON-SCORECARD"] = (120_000, 250_000, "icon-scorecard"),
         };
 
         public static (long Advanced, long Advice, string Route) For(string code) =>
@@ -226,6 +227,13 @@ public static class ToolFormsSeeder
                 currency = "میلیون ریال",
                 defaults = new { overheadPct = 35, developerProfitPct = 15, entrepreneurIncentivePct = 10, functionalObsolescencePct = 15, economicObsolescencePct = 5, discountRate = 22, royaltyRate = 4 },
             }), 16),
+
+        ("ICON-SCORECARD", "ارزش‌گذاری علامت تجاری (Icon Scorecard)", "RFR + Premium + بازار + Scorecard کنترلی + دامنه Monte Carlo", ToolKind.Calculator,
+            Json(new
+            {
+                currency = "ریال",
+                defaults = new { baseRevenue = 100_000_000_000, growth = 0.2, royalty = 0.02, tax = 0.2, discount = 0.25, maintenance = 50_000_000, attribution = 0.7, legalRisk = 1, premiumRate = 0.05, margin = 0.6, marketRoyalty = 0.02, similarity = 0.8, geo = 1, legalFactor = 1, mcGrowthLow = 0.08, mcGrowthHigh = 0.35 },
+            }), 17),
     ];
 
     private static object[] IdeaQuestions() =>
