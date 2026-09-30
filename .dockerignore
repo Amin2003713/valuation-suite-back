@@ -1,0 +1,11 @@
+**/bin/
+**/obj/
+**/.git/
+**/.idea/
+**/.freebuff/
+**/.env
+**/.env.*
+!**/.env.example
+**/node_modules/
+**/*.md
+compose.yaml

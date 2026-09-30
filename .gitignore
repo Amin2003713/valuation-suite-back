@@ -31,6 +31,7 @@ nuget.config
 **/obj/
 **/logs/
 *.env
+!.env.example
 ./front/**
 ./data/**
 data/

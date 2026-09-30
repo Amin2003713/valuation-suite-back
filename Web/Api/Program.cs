@@ -3,6 +3,7 @@ using ApiFramework;
 using Application;
 using Domain.Users;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.IdentityModel.Tokens;
 using Persistence;
@@ -123,10 +124,16 @@ public class Program
         {
             try
             {
+                var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+
+                // Fresh SQL Server containers start empty — apply EF migrations before seeding.
+                var db = scope.ServiceProvider.GetRequiredService<Persistence.DbContexts.ValuationDbContext>();
+                logger.LogInformation("Applying EF Core migrations...");
+                await db.Database.MigrateAsync();
+                logger.LogInformation("Database migrations applied");
+
                 await scope.ServiceProvider.GetRequiredService<Application.Assessments.Seeding.IpAssessmentSeederRunner>()
                     .RunAsync();
-
-                var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
                 await Application.Tools.Seeding.ToolFormsSeeder.SeedAsync(
                     scope.ServiceProvider.GetRequiredService<Application.Tools.Seeding.IToolFormsDbContext>(), logger);
 
