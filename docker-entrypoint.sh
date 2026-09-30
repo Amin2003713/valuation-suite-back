@@ -15,7 +15,7 @@ sleep 5   # port opens slightly before logins work
 
 # Start the API
 cd /app
-dotnet Web.Api.dll &
+dotnet Web.dll &
 APP_PID=$!
 
 # Forward shutdown signals to both processes
