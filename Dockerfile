@@ -1,0 +1,41 @@
+# ── Stage 2: Runtime (SQL Server + ASP.NET) ──────────────────────────────────
+FROM mcr.microsoft.com/mssql/server:2022-latest AS runtime
+
+USER root
+
+# ASP.NET runtime deps + curl (healthcheck), then install the .NET 10 ASP.NET runtime
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends curl ca-certificates libicu70 libssl3 && \
+    curl -sSL https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh && \
+    bash /tmp/dotnet-install.sh --channel 10.0 --runtime aspnetcore --install-dir /usr/share/dotnet && \
+    ln -s /usr/share/dotnet/dotnet /usr/bin/dotnet && \
+    rm -rf /tmp/dotnet-install.sh /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY --from=build /app/publish .
+COPY docker-entrypoint.sh /app/docker-entrypoint.sh
+RUN chmod +x /app/docker-entrypoint.sh && chown -R mssql:root /app
+
+# Run as the non-root user that ships with the SQL Server image
+USER mssql
+
+EXPOSE 8080
+
+# SQL Server settings
+ENV ACCEPT_EULA=Y
+ENV MSSQL_PID=Express
+ENV MSSQL_SA_PASSWORD=ChangeMe_Str0ng!Passw0rd
+ENV MSSQL_MEMORY_LIMIT_MB=1536
+
+# .NET app settings
+ENV ASPNETCORE_URLS=http://+:8080
+ENV ASPNETCORE_ENVIRONMENT=Production
+ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=false
+ENV ConnectionStrings__DefaultConnection="Server=localhost,1433;Database=ValuationSuite;User Id=sa;Password=ChangeMe_Str0ng!Passw0rd;TrustServerCertificate=True;Encrypt=True"
+
+VOLUME /var/opt/mssql
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8080/health || exit 1
+
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
