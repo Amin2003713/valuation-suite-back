@@ -17,7 +17,7 @@ RUN dotnet restore valuation-suite.sln
 COPY . .
 RUN dotnet publish Web/Api/Web.csproj -c $BUILD_CONFIGURATION -o /app/publish --no-restore
 
-# ── Stage 2: Runtime (SQL Server + ASP.NET) ──────────────────────────────────
+# ── Stage 2: Runtime (SQL Server + ASP.NET) ─────────────────────────────────
 FROM mcr.microsoft.com/mssql/server:2022-latest AS runtime
 
 USER root
@@ -32,17 +32,21 @@ RUN apt-get update && \
 WORKDIR /app
 COPY --from=build /app/publish .
 COPY docker-entrypoint.sh /app/docker-entrypoint.sh
-RUN chmod +x /app/docker-entrypoint.sh && chown -R mssql:root /app
+RUN sed -i 's/\r$//' /app/docker-entrypoint.sh && \
+    chmod +x /app/docker-entrypoint.sh && \
+    chown -R mssql:root /app
 
 USER mssql
 
 EXPOSE 8080
 
+# SQL Server (override the password in your platform's env settings)
 ENV ACCEPT_EULA=Y
 ENV MSSQL_PID=Express
 ENV MSSQL_SA_PASSWORD=ChangeMe_Str0ng!Passw0rd
 ENV MSSQL_MEMORY_LIMIT_MB=1536
 
+# .NET app
 ENV ASPNETCORE_URLS=http://+:8080
 ENV ASPNETCORE_ENVIRONMENT=Production
 ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=false
@@ -50,7 +54,7 @@ ENV ConnectionStrings__DefaultConnection="Server=localhost,1433;Database=Valuati
 
 VOLUME /var/opt/mssql
 
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=90s --retries=5 \
     CMD curl -f http://localhost:8080/health || exit 1
 
 ENTRYPOINT ["/app/docker-entrypoint.sh"]
