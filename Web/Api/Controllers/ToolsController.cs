@@ -27,11 +27,21 @@ public class ToolsController(IMediator mediator) : ControllerBase
     public async Task<IActionResult> Form(string toolCode, CancellationToken ct)
         => Ok(await mediator.Send(new GetToolFormQuery { ToolCode = toolCode }, ct));
 
-    /// <summary>Runs a tool: backend computes the result and persists a submission.</summary>
+    /// <summary>
+    ///     Runs a tool: the backend computes the result. Pass <c>?persist=false</c>
+    ///     for a preview run that is returned but not stored as a submission —
+    ///     the client persists on explicit save or when leaving the page.
+    /// </summary>
     [HttpPost("{toolCode}/run")]
     [Authorize]
-    public async Task<IActionResult> Run(string toolCode, [FromBody] JsonElement input, CancellationToken ct)
-        => Ok(await mediator.Send(new RunToolCommand { ToolCode = toolCode, Input = input }, ct));
+    public async Task<IActionResult> Run(
+        string toolCode, [FromBody] JsonElement input, [FromQuery] bool? persist, CancellationToken ct)
+        => Ok(await mediator.Send(new RunToolCommand
+        {
+            ToolCode = toolCode,
+            Input = input,
+            Persist = persist ?? true,
+        }, ct));
 
     /// <summary>
     ///     Runs a tool on behalf of a client/company (admin flow). The submission is

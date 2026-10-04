@@ -101,7 +101,31 @@ public static class AdminToolContentHandlers
         }
     }
 
-    // ─── GET /api/admin/companies/{id}/members ───────────────────────────
+    // ─── PUT /api/admin/tools/{code}/prices — pricing builder ────────────
+
+    public sealed class UpdateAdminToolPricesCommandHandler(
+        ICommandRepository<ToolForm> tools)
+        : IRequestHandler<UpdateAdminToolPricesCommand, AdminToolPriceRow>
+    {
+        public async Task<AdminToolPriceRow> Handle(UpdateAdminToolPricesCommand request, CancellationToken ct)
+        {
+            if (request.AdvancedPriceToman < 0 || request.AdvicePriceToman < 0)
+                throw ValuationException.BadRequest("قیمت نمی‌تواند منفی باشد.");
+
+            var tool = await tools.Table
+                .FirstOrDefaultAsync(t => t.ToolCode == request.ToolCode, ct)
+                ?? throw ValuationException.NotFound("ابزار یافت نشد.");
+
+            tool.AdvancedPriceToman = request.AdvancedPriceToman;
+            tool.AdvicePriceToman = request.AdvicePriceToman;
+            await tools.SaveChangesAsync(ct);
+
+            return new AdminToolPriceRow(
+                tool.ToolCode, tool.Title, tool.AdvancedPriceToman, tool.AdvicePriceToman);
+        }
+    }
+
+    // ─── GET /api/admin/companies/{id}/members ─────────────────────────
 
     public sealed class GetAdminCompanyMembersQueryHandler(
         IQueryRepository<Domain.Users.ApplicationUser> users,

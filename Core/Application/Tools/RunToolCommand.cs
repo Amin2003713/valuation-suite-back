@@ -2,11 +2,19 @@ using MediatR;
 
 namespace Application.Tools;
 
-/// <summary>Runs a tool with user input; returns the backend-computed result and stores a submission.</summary>
+/// <summary>Runs a tool with user input; returns the backend-computed result and (optionally) stores a submission.</summary>
 public class RunToolCommand : IRequest<ToolRunResponse>
 {
     public string ToolCode { get; set; } = string.Empty;
     public JsonElement Input { get; set; }
+
+    /// <summary>
+    ///     When false the tool is computed but no submission row is written — a
+    ///     "preview" run. The client persists on explicit save or when leaving the
+    ///     tool page, so typing does not spam the database. Defaults to true so
+    ///     existing callers keep storing their runs.
+    /// </summary>
+    public bool Persist { get; set; } = true;
 
     /// <summary>
     ///     Run-on-behalf context (admin flow): attribute the submission to a

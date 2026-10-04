@@ -90,6 +90,18 @@ public class AdminController(
         }).OrderBy(x => x.ToolCode).ToList());
     }
 
+    /// <summary>
+    ///     Update advanced/advice prices of one tool (pricing builder). Prices are
+    ///     read live by the pricing catalog, tool forms and checkout, so changes
+    ///     reflect everywhere on the next request — no caching layer involved.
+    /// </summary>
+    public record UpdateToolPricesRequest(long AdvancedPriceToman, long AdvicePriceToman);
+
+    [HttpPut("tools/{toolCode}/prices")]
+    [Authorize(Policy = "perm:access.manage")]
+    public async Task<IActionResult> UpdateToolPrices(string toolCode, [FromBody] UpdateToolPricesRequest request, CancellationToken ct)
+        => Ok(await mediator.Send(new UpdateAdminToolPricesCommand(toolCode, request.AdvancedPriceToman, request.AdvicePriceToman), ct));
+
     /// <summary>Paged company list with member/revenue aggregates.</summary>
     [HttpGet("companies")]
     [Authorize(Policy = "perm:customers.read")]

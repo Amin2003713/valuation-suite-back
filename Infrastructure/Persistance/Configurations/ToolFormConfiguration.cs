@@ -28,6 +28,10 @@ public class ToolSubmissionConfiguration : IEntityTypeConfiguration<ToolSubmissi
 
         builder.HasIndex(s => new { s.UserId, s.ToolCode });
         builder.HasIndex(s => s.UserId);
+        // Admin tool-usage aggregates GROUP BY ToolCode and analytics/submission
+        // lists filter + order by CreatedAt.
+        builder.HasIndex(s => s.ToolCode);
+        builder.HasIndex(s => s.CreatedAt);
 
         builder.HasOne<Domain.Users.ApplicationUser>()
             .WithMany()

@@ -193,21 +193,24 @@ public sealed class GetSubmissionNotesQueryHandler(ICommandRepository<Submission
             .OrderBy(n => n.CreatedAt)
             .ToListAsync(ct);
 
-        var unseenReplies = list.Where(n => n.AuthorIsCustomer && !n.SeenByAdviser).ToList();
-        if (unseenReplies.Count > 0)
+        var unseenIds = list
+            .Where(n => n.AuthorIsCustomer && !n.SeenByAdviser)
+            .Select(n => n.Id)
+            .ToList();
+        if (unseenIds.Count > 0)
         {
-            // Re-attach the tracked instances so the flag change persists.
-            foreach (var id in unseenReplies.Select(n => n.Id))
-            {
-                var tracked = await notes.Table.FirstOrDefaultAsync(n => n.Id == id, ct);
-                tracked?.MarkSeenByAdviser();
-            }
+            // Re-attach the tracked instances in ONE query so the flag change
+            // persists — previously this issued a SELECT per unseen note (N+1).
+            var trackedUnseen = await notes.Table
+                .Where(n => unseenIds.Contains(n.Id))
+                .ToListAsync(ct);
+            foreach (var n in trackedUnseen) n.MarkSeenByAdviser();
             await notes.SaveChangesAsync(ct);
         }
 
         return list.Select(n => new AdminNoteRow(
             n.Id, n.SubmissionId, n.Text, n.AudioBase64, n.AudioMimeType, n.AudioSeconds,
-            n.SeenByCustomer, n.CreatedAt, n.AuthorIsCustomer, n.SeenByAdviser || unseenReplies.Any(u => u.Id == n.Id)))
+            n.SeenByCustomer, n.CreatedAt, n.AuthorIsCustomer, n.SeenByAdviser || unseenIds.Contains(n.Id)))
             .ToList();
     }
 }
@@ -241,16 +244,19 @@ public sealed class GetMySubmissionNotesQueryHandler(
             .OrderBy(n => n.CreatedAt)
             .ToListAsync(ct);
 
-        // Persist read receipts on tracked instances (no-tracking list is detached,
-        // so mutating it alone would silently never save).
-        var unseen = list.Where(n => !n.AuthorIsCustomer && !n.SeenByCustomer).ToList();
-        if (unseen.Count > 0)
+        // Persist read receipts in ONE tracked query + save (the list above is
+        // no-tracking/detached, so mutating it alone would never save). This
+        // used to issue one SELECT per unseen note (N+1).
+        var unseenIds = list
+            .Where(n => !n.AuthorIsCustomer && !n.SeenByCustomer)
+            .Select(n => n.Id)
+            .ToList();
+        if (unseenIds.Count > 0)
         {
-            foreach (var id in unseen.Select(n => n.Id))
-            {
-                var tracked = await notes.Table.FirstOrDefaultAsync(n => n.Id == id, ct);
-                tracked?.MarkSeen();
-            }
+            var trackedUnseen = await notes.Table
+                .Where(n => unseenIds.Contains(n.Id))
+                .ToListAsync(ct);
+            foreach (var n in trackedUnseen) n.MarkSeen();
             await notes.SaveChangesAsync(ct);
         }
 
@@ -292,26 +298,42 @@ public sealed class GetMyToolAdviceThreadQueryHandler(
             .ToListAsync(ct);
         if (subIds.Count == 0) return null;
 
-        var paidSubIds = await payments.TableNoTracking
-            .Where(p => p.UserId == userId && p.Kind == PaymentKind.Advice &&
-                        p.Status == PaymentStatus.Paid && p.SubmissionId != null && subIds.Contains(p.SubmissionId.Value))
-            .Select(p => p.SubmissionId!.Value)
-            .ToListAsync(ct);
+        var paidSubIdSet = (await payments.TableNoTracking
+                .Where(p => p.UserId == userId && p.Kind == PaymentKind.Advice &&
+                            p.Status == PaymentStatus.Paid && p.SubmissionId != null && subIds.Contains(p.SubmissionId.Value))
+                .Select(p => p.SubmissionId!.Value)
+                .ToListAsync(ct))
+            .ToHashSet();
 
-        var latest =
-            paidSubIds.Count > 0
-                ? subIds.FirstOrDefault(id => paidSubIds.Contains(id))
-                : subIds.FirstOrDefault(id => notes.TableNoTracking.Any(n => n.SubmissionId == id));
+        Guid? latest;
+        if (paidSubIdSet.Count > 0)
+        {
+            // Newest submission with a paid advice payment.
+            latest = subIds.FirstOrDefault(id => paidSubIdSet.Contains(id));
+        }
+        else
+        {
+            // Newest submission that has any note — one DISTINCT query instead
+            // of an EXISTS round-trip per submission (N+1 → 1).
+            var noteSubIds = (await notes.TableNoTracking
+                    .Where(n => subIds.Contains(n.SubmissionId))
+                    .Select(n => n.SubmissionId)
+                    .Distinct()
+                    .ToListAsync(ct))
+                .ToHashSet();
 
-        if (latest == Guid.Empty) return null;
-        var subId = latest;
+            var firstWithNote = subIds.FirstOrDefault(id => noteSubIds.Contains(id));
+            latest = firstWithNote != Guid.Empty ? firstWithNote : null;
+        }
+
+        if (latest is not { } subId) return null;
 
         var list = await notes.TableNoTracking
             .Where(n => n.SubmissionId == subId)
             .OrderBy(n => n.CreatedAt)
             .ToListAsync(ct);
 
-        var paid = paidSubIds.Contains(subId);
+        var paid = paidSubIdSet.Contains(subId);
 
         return new MyAdviceThreadResponse(
             subId,

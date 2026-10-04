@@ -43,6 +43,7 @@ public static class ToolRunnerRegistration
         services.AddSingleton<KnowhowValuationRunner>();
         services.AddSingleton<IToolRunner, KnowhowValuationRunner>(sp => sp.GetRequiredService<KnowhowValuationRunner>());
         services.AddSingleton<IToolRunner, IconScorecardRunner>();
+        services.AddSingleton<IToolRunner, PatentSearchRunner>(); // patent-search — persists searches so adviser chat works
 
         services.AddSingleton<IToolRunnerResolver, ToolRunnerResolver>();
         return services;

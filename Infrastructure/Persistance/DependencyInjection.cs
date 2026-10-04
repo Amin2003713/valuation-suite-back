@@ -2,6 +2,7 @@ using Common.General;
 using Domain.Payments;
 using Domain.Users;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Persistence.Repositories.Assessments;
 using Persistence.Repositories.Attempts;
@@ -13,77 +14,95 @@ namespace Persistence;
 
 public static class DependencyInjection
 {
+    /// <summary>
+    ///     Marker option for the SQLite (Docker) profile: the schema is created from the
+    ///     EF model (EnsureCreated) instead of migrations — SQLite migrations are not set
+    ///     up for this project and SQL Server migration SQL is not portable.
+    /// </summary>
+    public sealed class DbInitMarkers
+    {
+        public bool UseEnsureCreated { get; set; }
+        public string Provider { get; set; } = "SqlServer";
+    }
+
+    private static void ConfigureProvider(
+        DbContextOptionsBuilder<ValuationDbContext> builder, bool isSqlite, string connectionString)
+    {
+        if (isSqlite)
+        {
+            builder.UseSqlite(connectionString);
+        }
+        else
+        {
+            builder.UseSqlServer(connectionString, sqlOptions =>
+            {
+                sqlOptions.MigrationsAssembly(typeof(ValuationDbContext).Assembly.FullName);
+                sqlOptions.EnableRetryOnFailure(5, TimeSpan.FromSeconds(10), null);
+            });
+        }
+    }
+
     public static IServiceCollection AddPersistence(this IServiceCollection services, IConfiguration configuration)
     {
-        var connectionString =
-            configuration.GetConnectionString("AssessmentDb")
-            ?? ApplicationConstant.AppOptions.ConnectionString;
+        var provider = (configuration["Database:Provider"] ?? "SqlServer").Trim();
+        var isSqlite = provider.Equals("Sqlite", StringComparison.OrdinalIgnoreCase);
+
+        // SQLite (Docker profile): file path from Database:SqlitePath, or a Docker-friendly default.
+        var sqlitePath = configuration["Database:SqlitePath"] ?? "/app/data/valuationsuite.db";
+
+        var connectionString = isSqlite
+            ? $"Data Source={sqlitePath}"
+            : configuration.GetConnectionString("AssessmentDb")
+                ?? ApplicationConstant.AppOptions.ConnectionString;
 
         ApplicationConstant.AppOptions.ConnectionString = connectionString;
+
+        // Program.cs branches on this to EnsureCreated (Sqlite) vs Migrate (SqlServer).
+        services.AddSingleton(new DbInitMarkers { UseEnsureCreated = isSqlite, Provider = provider });
 
         services.AddHttpContextAccessor();
         services.AddScoped<IdentityService>();
 
-        // ---- ASP.NET Core Identity (IdentityUser-backed users) ----
+        // Identity requires relational access; SQLite is relational so EF stores work as-is.
         services
             .AddIdentityCore<ApplicationUser>(options =>
             {
-                options.User.RequireUniqueEmail = true;
-                options.Password.RequiredLength = 6;
-                options.Password.RequireNonAlphanumeric = false;
-                options.Password.RequireUppercase = false;
-                options.Password.RequireLowercase = false;
-                options.Password.RequireDigit = false;
-                options.Lockout.AllowedForNewUsers = false;
-            })
+            options.User.RequireUniqueEmail = true;
+            options.Password.RequiredLength = 6;
+            options.Password.RequireNonAlphanumeric = false;
+            options.Password.RequireUppercase = false;
+            options.Password.RequireLowercase = false;
+            options.Password.RequireDigit = false;
+            options.Lockout.AllowedForNewUsers = false;
+        })
             .AddRoles<IdentityRole<Guid>>()
             .AddEntityFrameworkStores<ValuationDbContext>()
             .AddDefaultTokenProviders()
             .AddSignInManager();
 
-        // ---- Direct context registration (required by Identity stores & EF tooling) ----
-        services.AddDbContext<ValuationDbContext>(options =>
-            options.UseSqlServer(connectionString, sqlOptions =>
-            {
-                sqlOptions.MigrationsAssembly(typeof(ValuationDbContext).Assembly.FullName);
-                sqlOptions.EnableRetryOnFailure(5, TimeSpan.FromSeconds(10), null);
-            }));
+        // ---- Contexts (provider chosen once, applied to all three contexts) ----
+        void Configure(DbContextOptionsBuilder b) => ConfigureProvider((DbContextOptionsBuilder<ValuationDbContext>)b, isSqlite, connectionString);
 
-        // ---- Write side ----
-        services.AddScoped<WriteOnlyDbContext>(provider =>
+        services.AddDbContext<ValuationDbContext>((_, options) => Configure(options));        services.AddScoped<WriteOnlyDbContext>(provider =>
         {
-            var options = new DbContextOptionsBuilder<ValuationDbContext>()
-                .UseSqlServer(connectionString, sqlOptions =>
-                {
-                    sqlOptions.MigrationsAssembly(typeof(ValuationDbContext).Assembly.FullName);
-                    sqlOptions.EnableRetryOnFailure(5, TimeSpan.FromSeconds(10), null);
-                })
-                .Options;
-
+            var options = new DbContextOptionsBuilder<ValuationDbContext>();
+            Configure(options);
             var identity = provider.GetRequiredService<IdentityService>();
-            return new WriteOnlyDbContext(options, identity);
+            return new WriteOnlyDbContext(options.Options, identity);
         });
-
-        // ---- Read side ----
         services.AddScoped<ReadOnlyDbContext>(provider =>
         {
-            var options = new DbContextOptionsBuilder<ValuationDbContext>()
-                .UseSqlServer(connectionString, sqlOptions =>
-                {
-                    sqlOptions.MigrationsAssembly(typeof(ValuationDbContext).Assembly.FullName);
-                    sqlOptions.EnableRetryOnFailure(5, TimeSpan.FromSeconds(10), null);
-                })
-                .Options;
-
+            var options = new DbContextOptionsBuilder<ValuationDbContext>();
+            Configure(options);
             var identity = provider.GetRequiredService<IdentityService>();
-            return new ReadOnlyDbContext(options, identity);
+            return new ReadOnlyDbContext(options.Options, identity);
         });
 
         // ---- Generic repositories ----
         services.AddScoped(typeof(ICommandRepository<>), typeof(Repositories.Common.CommandRepository<>));
         services.AddScoped(typeof(IQueryRepository<>), typeof(Repositories.Common.QueryRepository<>));
 
-        // ---- Aggregate-specific repositories ----
+        // ---- Aggregate-specific repositories (unchanged wiring) ----
         services.AddScoped<IAssessmentCommandRepository, AssessmentCommandRepository>();
         services.AddScoped<IAssessmentQueryRepository, AssessmentQueryRepository>();
         services.AddScoped<IAssessmentVersionCommandRepository, AssessmentVersionCommandRepository>();

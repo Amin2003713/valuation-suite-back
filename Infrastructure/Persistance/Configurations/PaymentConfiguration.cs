@@ -21,5 +21,9 @@ public class PaymentConfiguration : IEntityTypeConfiguration<Payment>
         builder.HasIndex(p => p.UserId);
         builder.HasIndex(p => p.Authority);
         builder.HasIndex(p => p.Status);
+        // Advice-entitlement lookups filter on (UserId, SubmissionId, Kind, Status);
+        // analytics filters paid payments in a CreatedAt window.
+        builder.HasIndex(p => p.SubmissionId);
+        builder.HasIndex(p => new { p.Status, p.CreatedAt });
     }
 }

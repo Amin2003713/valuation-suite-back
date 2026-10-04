@@ -37,8 +37,11 @@ public sealed class HttpCurrentUserAccessor(IHttpContextAccessor accessor) : ICu
 /// </summary>
 public static class AdvancedSections
 {
+    /* scenarioValues/allValues are NOT stripped: they are summary ranges that
+     * every user sees (probabilistic + summary panels) — stripping them crashed
+     * the free-tier summary UI. */
     private static readonly string[] Keys =
-        ["mc", "mcResults", "tornado", "scenarios", "scenarioValues", "allValues", "vals", "methods"];
+        ["mc", "mcResults", "tornado", "scenarios", "vals", "methods"];
 
     /// <summary>
     ///     Serializes the result (camelCase, exactly as the client receives it) and
@@ -123,6 +126,17 @@ public sealed class RunToolCommandHandler(
         var advancedIncluded = await entitlements.CanViewAdvancedAsync(effectiveUserId, request.ToolCode, ct);
         if (!advancedIncluded)
             outcome = outcome with { Result = AdvancedSections.Strip(outcome.Result) };
+
+        // Preview run (persist:false): compute and return, but do NOT create a
+        // submission. The client saves explicitly or when leaving the page, so
+        // live typing no longer writes a row (and an entitlement read) per edit.
+        if (!request.Persist)
+            return new ToolRunResponse(
+                Guid.Empty,
+                request.ToolCode,
+                ToolInput.ToJsonElement(outcome.Result),
+                outcome.OverallScore,
+                advancedIncluded);
 
         var submission = ToolSubmission.Create(
             effectiveUserId,

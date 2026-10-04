@@ -16,6 +16,8 @@ public class UserConfiguration : IEntityTypeConfiguration<ApplicationUser>
 
         builder.HasIndex(u => u.Plan);
         builder.HasIndex(u => u.CompanyId);
+        // Admin customer/user lists page through ORDER BY CreatedAt DESC.
+        builder.HasIndex(u => u.CreatedAt);
 
         builder.HasOne(u => u.Company)
             .WithMany()

@@ -140,6 +140,9 @@ public sealed record UpdateAdminToolQuestionCommand(
 /// <summary>Updates tool-level editable fields (title; description optional).</summary>
 public sealed record UpdateAdminToolCommand(string ToolCode, string? Title, string? Description) : IRequest<AdminToolRow>;
 
+/// <summary>Admin pricing builder: set advanced/advice prices (Toman) for one tool.</summary>
+public sealed record UpdateAdminToolPricesCommand(string ToolCode, long AdvancedPriceToman, long AdvicePriceToman) : IRequest<AdminToolPriceRow>;
+
 /// <summary>Members of one company (admin "see members" modal).</summary>
 public sealed record GetAdminCompanyMembersQuery(Guid CompanyId) : IRequest<List<AdminCompanyMemberRow>>;
 

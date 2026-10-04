@@ -63,6 +63,9 @@ public static class ToolFormsSeeder
             ["INTANGIBLE"] = (100_000, 250_000, "intangible-assets"),
             ["KNOWHOW"] = (100_000, 250_000, "knowhow-valuation"),
             ["ICON-SCORECARD"] = (120_000, 250_000, "icon-scorecard"),
+            // Search runs client-side (Lens.org); the row exists so the run is
+            // persisted as a submission and the paid adviser chat is offered.
+            ["PATENT-SEARCH"] = (0, 200_000, "patent-search"),
         };
 
         public static (long Advanced, long Advice, string Route) For(string code) =>
@@ -234,6 +237,14 @@ public static class ToolFormsSeeder
                 currency = "ریال",
                 defaults = new { baseRevenue = 100_000_000_000, growth = 0.2, royalty = 0.02, tax = 0.2, discount = 0.25, maintenance = 50_000_000, attribution = 0.7, legalRisk = 1, premiumRate = 0.05, margin = 0.6, marketRoyalty = 0.02, similarity = 0.8, geo = 1, legalFactor = 1, mcGrowthLow = 0.08, mcGrowthHigh = 0.35 },
             }), 17),
+
+        ("PATENT-SEARCH", "جستجوی پتنت", "جستجوی پیشرفته اختراعات (Lens.org) + بررسی کارشناسی", ToolKind.Assessment,
+            Json(new
+            {
+                source = "Lens.org",
+                translation = "MyMemory",
+                fields = new[] { "title1", "title2", "abstract1", "abstract2", "claim1", "claim2" },
+            }), 7),
     ];
 
     private static object[] IdeaQuestions() =>

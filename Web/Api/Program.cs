@@ -126,11 +126,23 @@ public class Program
             {
                 var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
 
-                // Fresh SQL Server containers start empty — apply EF migrations before seeding.
+                // SQL Server (local/dev default): apply EF migrations.
+                // SQLite (Docker profile): no portable migrations — generate the
+                // schema from the model instead, then seeding runs identically.
                 var db = scope.ServiceProvider.GetRequiredService<Persistence.DbContexts.ValuationDbContext>();
-                logger.LogInformation("Applying EF Core migrations...");
-                await db.Database.MigrateAsync();
-                logger.LogInformation("Database migrations applied");
+                var markers = scope.ServiceProvider.GetRequiredService<Persistence.DependencyInjection.DbInitMarkers>();
+                if (markers.Provider.Equals("Sqlite", StringComparison.OrdinalIgnoreCase))
+                {
+                    logger.LogInformation("Database:Provider=Sqlite — ensuring database created from model...");
+                    await db.Database.EnsureCreatedAsync();
+                    logger.LogInformation("SQLite database ready");
+                }
+                else
+                {
+                    logger.LogInformation("Applying EF Core migrations...");
+                    await db.Database.MigrateAsync();
+                    logger.LogInformation("Database migrations applied");
+                }
 
                 await scope.ServiceProvider.GetRequiredService<Application.Assessments.Seeding.IpAssessmentSeederRunner>()
                     .RunAsync();

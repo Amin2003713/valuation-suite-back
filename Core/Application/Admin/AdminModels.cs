@@ -69,6 +69,10 @@ public sealed record AdminPaymentListResponse(
 public sealed record AdminToolRow(
     string ToolCode, string Title, string Kind, long Uses, long DistinctUsers);
 
+/// <summary>One tool's monetization prices for the admin pricing builder.</summary>
+public sealed record AdminToolPriceRow(
+    string ToolCode, string Title, long AdvancedPriceToman, long AdvicePriceToman);
+
 public sealed record AdminCompanyRow(
     Guid Id, string Name, string Slug, int Members, int ProMembers,
     long PaidTotal, DateTime CreatedAt);
