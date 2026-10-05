@@ -36,6 +36,7 @@ public class AuthController(
             Email = email,
             DisplayName = request.Name.Trim(),
             Plan = global::Domain.Companies.Plan.Free,
+            UseCase = string.IsNullOrWhiteSpace(request.UseCase) ? null : request.UseCase.Trim(),
         };
 
         var result = await userManager.CreateAsync(user, request.Password);
@@ -48,19 +49,22 @@ public class AuthController(
         await userManager.UpdateAsync(user);
 
         // Optional company registration at sign-up (users register their company too).
+        Domain.Companies.Company? createdCompany = null;
         if (!string.IsNullOrWhiteSpace(request.CompanyName))
         {
             var slug = Slugify(request.CompanyName);
-            var company = Domain.Companies.Company.Create(request.CompanyName.Trim(), slug);
-            await companyCommands.AddAsync(company, ct, saveNow: true);
-            user.CompanyId = company.Id;
+            createdCompany = Domain.Companies.Company.Create(request.CompanyName.Trim(), slug);
+            if (!string.IsNullOrWhiteSpace(request.Industry))
+                createdCompany.SetIndustry(request.Industry.Trim());
+            await companyCommands.AddAsync(createdCompany, ct, saveNow: true);
+            user.CompanyId = createdCompany.Id;
             await userManager.UpdateAsync(user);
         }
 
         var roles = await userManager.GetRolesAsync(user);
         var (token, expiresAt) = tokenService.CreateToken(user, roles);
 
-        return Ok(BuildAuthResponse(user, roles, token, expiresAt));
+        return Ok(BuildAuthResponse(user, roles, token, expiresAt, createdCompany));
     }
 
     [HttpPost("login")]
@@ -107,7 +111,8 @@ public class AuthController(
             user.IsPro,
             user.CompanyId,
             user.Company != null ? user.Company.Name : null,
-            roles.ToList()));
+            roles.ToList(),
+            user.UseCase));
     }
 
     /// <summary>Reads the current user's profile (account page).</summary>
@@ -124,20 +129,29 @@ public class AuthController(
 
     public record UpdateProfileRequest(string? DisplayName, string? PhoneNumber);
 
-    private AuthResponse BuildAuthResponse(ApplicationUser user, IList<string> roles, string token, DateTime expiresAt)
+    private AuthResponse BuildAuthResponse(
+        ApplicationUser user,
+        IList<string> roles,
+        string token,
+        DateTime expiresAt,
+        Domain.Companies.Company? company = null)
     {
+        // On register the freshly-created company is not attached to the tracked
+        // user, so callers pass it in explicitly; login/me fall back to the nav.
+        var co = company ?? user.Company;
         return new AuthResponse(
             user.Id,
             user.DisplayName,
             user.Email ?? string.Empty,
             user.Plan.ToString(),
             user.IsPro,
-            user.CompanyId,
-            user.Company != null ? user.Company.Name : null,
+            co?.Id ?? user.CompanyId,
+            co?.Name,
             roles.ToList(),
-            user.Company != null ? user.Company.Slug : null,
-            user.Company != null ? user.Company.LogoUrl : null,
-            user.Company != null ? user.Company.Industry : null,
+            co?.Slug,
+            co?.LogoUrl,
+            co?.Industry,
+            user.UseCase,
             token,
             expiresAt);
     }

@@ -20,6 +20,13 @@ public class ApplicationUser : IdentityUser<Guid>, IEntity
     public Company? Company { get; set; }
     public DateTime? LastLoginAt { get; set; }
 
+    /// <summary>
+    ///     Onboarding preference: what the user mainly wants to value
+    ///     (startup / ip / brand / intangible). Drives the highlighted tools on
+    ///     the home dashboard. Null until they complete/choose.
+    /// </summary>
+    public string? UseCase { get; set; }
+
     public bool IsActive { get; set; } = true;
     public Guid? CreatedBy { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

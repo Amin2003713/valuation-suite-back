@@ -13,6 +13,7 @@ public class UserConfiguration : IEntityTypeConfiguration<ApplicationUser>
         builder.Property(u => u.Plan).HasConversion<int>().HasDefaultValue(Plan.Free);
         builder.Property(u => u.PlanExpiresAt);
         builder.Property(u => u.LastLoginAt);
+        builder.Property(u => u.UseCase).HasMaxLength(40);
 
         builder.HasIndex(u => u.Plan);
         builder.HasIndex(u => u.CompanyId);
