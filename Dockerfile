@@ -47,4 +47,4 @@ ENV Database__SqlitePath=/app/data/valuationsuite.db
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=5 \
     CMD curl -f http://localhost:8080/health || exit 1
 
-ENTRYPOINT ["dotnet", "Web.Api.dll"]
+ENTRYPOINT ["dotnet", "Web.dll"]
