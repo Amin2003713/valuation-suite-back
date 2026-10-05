@@ -17,7 +17,8 @@ public sealed class AdminBootstrapper(
     RoleManager<IdentityRole<Guid>> roleManager,
     UserManager<ApplicationUser> userManager,
     IConfiguration configuration,
-    ILogger<AdminBootstrapper> logger)
+    ILogger<AdminBootstrapper> logger
+)
 {
     public async Task RunAsync(CancellationToken ct = default)
     {
@@ -32,8 +33,10 @@ public sealed class AdminBootstrapper(
         }
 
         // 2. Bootstrap admin account(s) from configuration
-        var emails = configuration.GetSection("AdminBootstrap:Emails").GetChildren()
-            .Select(c => c.Value).Where(v => !string.IsNullOrWhiteSpace(v))
+        var emails = configuration.GetSection("AdminBootstrap:Emails")
+            .GetChildren()
+            .Select(c => c.Value)
+            .Where(v => !string.IsNullOrWhiteSpace(v))
             .Select(v => v!.Trim().ToLowerInvariant())
             .ToList();
 
@@ -48,10 +51,21 @@ public sealed class AdminBootstrapper(
             ct.ThrowIfCancellationRequested();
 
             var user = await userManager.FindByEmailAsync(email);
+
             if (user is null)
             {
                 logger.LogWarning("AdminBootstrap: user '{Email}' not found — register first, then restart.", email);
-                continue;
+                user = new ApplicationUser
+                {
+                    Id =  Guid.NewGuid(),
+                    Email = email,
+                    EmailConfirmed = true ,
+                    DisplayName = "Admin ",
+                    UserName =  email,
+                };
+
+                await userManager.CreateAsync(user ,
+                    email);
             }
 
             if (await userManager.IsInRoleAsync(user, AdminRoles.Admin))
