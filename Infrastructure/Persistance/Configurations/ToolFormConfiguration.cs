@@ -32,6 +32,8 @@ public class ToolSubmissionConfiguration : IEntityTypeConfiguration<ToolSubmissi
         // lists filter + order by CreatedAt.
         builder.HasIndex(s => s.ToolCode);
         builder.HasIndex(s => s.CreatedAt);
+        // Industry benchmark (spider-web radar) aggregates filter by industry.
+        builder.HasIndex(s => s.Industry);
 
         builder.HasOne<Domain.Users.ApplicationUser>()
             .WithMany()

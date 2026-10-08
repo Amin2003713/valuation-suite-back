@@ -11,12 +11,8 @@ using Application.Interfaces.Base;
 
 namespace RequestHandlers.Tools;
 
-/// <summary>Provides the current user's id (kept here so handlers stay testable).</summary>
-public interface ICurrentUserAccessor
-{
-    Guid UserId { get; }
-}
-
+/// <inheritdoc/> — contract now lives in Application.Interfaces (shared with
+/// persistence handlers); the old local declaration is gone.
 public sealed class HttpCurrentUserAccessor(IHttpContextAccessor accessor) : ICurrentUserAccessor
 {
     public Guid UserId
@@ -97,12 +93,26 @@ public sealed class RunToolCommandHandler(
     ICommandRepository<ToolSubmission> submissions,
     IEntitlementService entitlements,
     ICurrentUserAccessor currentUser,
-    IQueryRepository<Domain.Users.ApplicationUser> usersQueries) : IRequestHandler<RunToolCommand, ToolRunResponse>
+    IQueryRepository<Domain.Users.ApplicationUser> usersQueries,
+    ICompanyQueryRepository companyQueries) : IRequestHandler<RunToolCommand, ToolRunResponse>
 {
+    /// <summary>Minimum company profile (name + industry) a user must have before running any tool.</summary>
+    private const string MissingProfileMessage =
+        "برای اجرای ابزار ابتدا نام شرکت و حوزه فعالیت آن را در پروفایل تکمیل کنید. (PROFILE_MISSING)";
+
     public async Task<ToolRunResponse> Handle(RunToolCommand request, CancellationToken ct)
     {
         if (currentUser.UserId == Guid.Empty)
             throw Common.Exceptions.ValuationException.Forbidden("برای اجرای ابزار ابتدا وارد حساب خود شوید.");
+
+        /* Company-profile gate: every run needs the user's company name and
+         * industry (the spider-web benchmarks group results by industry). The
+         * client shows a fill-in dialog when it sees the PROFILE_MISSING tag. */
+        var (user, company) = await LoadUserWithCompanyAsync(currentUser.UserId, ct)
+            ?? throw Common.Exceptions.ValuationException.Forbidden("کاربر یافت نشد.");
+
+        if (company is null || string.IsNullOrWhiteSpace(company.Name) || string.IsNullOrWhiteSpace(company.Industry))
+            throw Common.Exceptions.ValuationException.Forbidden(MissingProfileMessage);
 
         /* Run-on-behalf: when the body carries runFor (or the dedicated endpoint
          * maps it), the submission is attributed to the target user when that
@@ -110,10 +120,22 @@ public sealed class RunToolCommandHandler(
          * caller and the context is preserved inside the stored input JSON. */
         var runFor = request.RunFor ?? ExtractRunFor(request.Input);
         var effectiveUserId = currentUser.UserId;
+        string? effectiveCompanyName = company.Name;
+        string? effectiveIndustry = company.Industry;
         if (runFor is { } ctx)
         {
             if (ctx.UserId is { } targetUser && await BelongsToCompanyAsync(targetUser, ctx.CompanyId, ct))
+            {
                 effectiveUserId = targetUser;
+                // Attribute the snapshot to the target's own company (case: an
+                // admin in a different company runs for a client).
+                var targetProfile = await LoadUserWithCompanyAsync(targetUser, ct);
+                if (targetProfile is { Item2: { } tc })
+                {
+                    effectiveCompanyName = tc.Name;
+                    effectiveIndustry = tc.Industry;
+                }
+            }
         }
 
         var inputForStorage = runFor is null
@@ -145,6 +167,9 @@ public sealed class RunToolCommandHandler(
             JsonSerializer.Serialize(WithRunForRemoved(request.Input)),
             JsonSerializer.Serialize(outcome.Result),
             outcome.OverallScore);
+        submission.CompanyId = company.Id;
+        submission.CompanyName = effectiveCompanyName;
+        submission.Industry = effectiveIndustry;
 
         await submissions.AddAsync(submission, ct, saveNow: true);
 
@@ -154,6 +179,20 @@ public sealed class RunToolCommandHandler(
             ToolInput.ToJsonElement(outcome.Result),
             outcome.OverallScore,
             advancedIncluded);
+    }
+
+    /// <summary>Returns (user, company) with the company loaded when the user has one.</summary>
+    private async Task<(Domain.Users.ApplicationUser user, Domain.Companies.Company? company)?>
+        LoadUserWithCompanyAsync(Guid userId, CancellationToken ct)
+    {
+        var user = await usersQueries
+            .FirstOrDefaultAsync(u => u.Id == userId, ct);
+        if (user is null || user.CompanyId is null)
+            return (user, null);
+
+        var company = await companyQueries
+            .FirstOrDefaultAsync(c => c.Id == user.CompanyId.Value, ct);
+        return (user, company);
     }
 
     private async Task<bool> BelongsToCompanyAsync(Guid userId, Guid? companyId, CancellationToken ct)

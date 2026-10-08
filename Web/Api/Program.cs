@@ -67,7 +67,7 @@ public class Program
         builder.Services.AddHandlers();
 
         // Current-user accessor used by tool handlers (composition root wiring)
-        builder.Services.AddScoped<RequestHandlers.Tools.ICurrentUserAccessor, RequestHandlers.Tools.HttpCurrentUserAccessor>();
+        builder.Services.AddScoped<Application.Interfaces.ICurrentUserAccessor, RequestHandlers.Tools.HttpCurrentUserAccessor>();
 
         // ---- JWT auth ----
         builder.Services.AddScoped<TokenService>();

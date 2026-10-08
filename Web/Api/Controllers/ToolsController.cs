@@ -1,9 +1,11 @@
 using System.Text.Json;
 using ApiFramework.Controller;
+using Application.Interfaces;
 using Application.Tools;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Web.Api.Services;
 
 namespace Web.Api.Controllers;
 
@@ -13,7 +15,7 @@ namespace Web.Api.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/tools")]
-public class ToolsController(IMediator mediator) : ControllerBase
+public class ToolsController(IMediator mediator, ICurrentUserAccessor currentUser) : ControllerBase
 {
     /// <summary>List of registered tools (for building menus).</summary>
     [HttpGet]
@@ -73,6 +75,16 @@ public class ToolsController(IMediator mediator) : ControllerBase
     [Authorize]
     public async Task<IActionResult> Submissions([FromQuery] string? toolCode, CancellationToken ct)
         => Ok(await mediator.Send(new GetToolSubmissionsQuery { ToolCode = toolCode }, ct));
+
+    /// <summary>
+    ///     Benchmark stats for the spider-web chart of one tool: per-metric
+    ///     Min/Max/Avg inside the caller's company industry plus the same stats
+    ///     across ALL submissions of the tool.
+    /// </summary>
+    [HttpGet("benchmark")]
+    [Authorize]
+    public async Task<IActionResult> Benchmark([FromQuery] string toolCode, CancellationToken ct)
+        => Ok(await mediator.Send(new GetToolBenchmarkQuery(toolCode, User.GetUserId()), ct));
 
     /// <summary>
     ///     The current user's latest advice thread for a tool (latest submission with

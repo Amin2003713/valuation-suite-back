@@ -125,9 +125,9 @@ public class AuthController(
     [HttpPut("profile")]
     [Authorize]
     public async Task<IActionResult> UpdateProfile([FromBody] UpdateProfileRequest request, CancellationToken ct)
-        => Ok(await mediator.Send(new UpdateMyProfileCommand(request.DisplayName, request.PhoneNumber), ct));
+        => Ok(await mediator.Send(new UpdateMyProfileCommand(request.DisplayName, request.PhoneNumber, request.CompanyName, request.Industry), ct));
 
-    public record UpdateProfileRequest(string? DisplayName, string? PhoneNumber);
+    public record UpdateProfileRequest(string? DisplayName, string? PhoneNumber, string? CompanyName, string? Industry);
 
     private AuthResponse BuildAuthResponse(
         ApplicationUser user,

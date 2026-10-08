@@ -7,7 +7,7 @@ using Domain.Users;
 using MediatR;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using ICurrentUserAccessor = RequestHandlers.Tools.ICurrentUserAccessor;
+using ICurrentUserAccessor = Application.Interfaces.ICurrentUserAccessor;
 
 namespace RequestHandler.Admin;
 

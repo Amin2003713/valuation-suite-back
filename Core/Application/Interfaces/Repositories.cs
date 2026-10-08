@@ -8,6 +8,13 @@ using Domain.Users;
 
 namespace Application.Interfaces;
 
+/// <summary>Provides the id of the current (JWT) user. Implementation lives in the host.</summary>
+public interface ICurrentUserAccessor
+{
+    /// <summary>Guid.Empty when unauthenticated.</summary>
+    Guid UserId { get; }
+}
+
 // =========================================================
 // Assessments
 // =========================================================

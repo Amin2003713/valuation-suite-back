@@ -2,8 +2,15 @@ using MediatR;
 
 namespace Application.Users;
 
-/// <summary>Updates the current user's own profile (display name and/or phone number).</summary>
-public sealed record UpdateMyProfileCommand(string? DisplayName, string? PhoneNumber) : IRequest<ProfileResponse>;
+/// <summary>
+///     Updates the current user's own profile (display name, phone number and
+///     the company name / industry captured at onboarding).
+/// </summary>
+public sealed record UpdateMyProfileCommand(
+    string? DisplayName,
+    string? PhoneNumber,
+    string? CompanyName = null,
+    string? Industry = null) : IRequest<ProfileResponse>;
 
 /// <summary>Current user's profile snapshot (also used as the response of profile reads).</summary>
 public record ProfileResponse(
@@ -16,6 +23,7 @@ public record ProfileResponse(
     DateTime? PlanExpiresAt,
     Guid? CompanyId,
     string? CompanyName,
+    string? CompanyIndustry,
     List<string> Roles);
 
 /// <summary>Reads the current user's profile.</summary>

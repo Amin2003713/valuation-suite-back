@@ -59,6 +59,17 @@ public sealed class ToolSubmission : BaseEntity
     /// <summary>Normalized 0-100 score when the tool produces one; null for pure calculators.</summary>
     public double? OverallScore { get; set; }
 
+    /// <summary>
+    ///     Snapshot of the submitting user's company at run time. The benchmark
+    ///     (spider-web) charts group submissions by industry, and capturing the
+    ///     values per run keeps history stable when a user later edits their
+    ///     profile. Null for legacy submissions (excluded from area groupings
+    ///     but still counted in overall stats).
+    /// </summary>
+    public Guid? CompanyId { get; set; }
+    public string? CompanyName { get; set; }
+    public string? Industry { get; set; }
+
     public static ToolSubmission Create(Guid userId, string toolCode, string? name, string inputJson, string resultJson, double? overallScore) =>
         new() { UserId = userId, ToolCode = toolCode, Name = name, InputJson = inputJson, ResultJson = resultJson, OverallScore = overallScore };
 }

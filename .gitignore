@@ -3,6 +3,8 @@
 
 ## NuGet Packages
 *.nupkg
+
+*.db*
 #
 ## NuGet Packages
 *.nupkg
