@@ -45,6 +45,16 @@ public static class ToolRunnerRegistration
         services.AddSingleton<IToolRunner, IconScorecardRunner>();
         services.AddSingleton<IToolRunner, PatentSearchRunner>(); // patent-search — persists searches so adviser chat works
 
+        // 2026 batch — client-side calculators ported 1:1 to the backend
+        services.AddSingleton<IToolRunner, BinomialResearchRunner>();
+        services.AddSingleton<IToolRunner, SoftwareValuationFrameworkRunner>();
+        services.AddSingleton<IToolRunner, RnpvCalculatorRunner>();
+        services.AddSingleton<IToolRunner, PatentValueIndexRunner>();
+        services.AddSingleton<IToolRunner, KnowhowProRunner>();
+        services.AddSingleton<IToolRunner, ExportReadinessRunner>();
+        services.AddSingleton<IToolRunner, DigitalAiReadinessRunner>();
+        services.AddSingleton<IToolRunner, MaturityAssessmentRunner>();
+
         services.AddSingleton<IToolRunnerResolver, ToolRunnerResolver>();
         return services;
     }

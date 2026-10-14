@@ -3,13 +3,19 @@ using Application.Companies.Commands.UpdateCompany;
 namespace RequestHandlers.Companies.Commands.UpdateCompany;
 
 public sealed class UpdateCompanyCommandHandler(
-    ICompanyCommandRepository companyRepository
+    ICompanyCommandRepository companyRepository,
+    ICurrentUserAccessor currentUser
 ) : IRequestHandler<UpdateCompanyCommand>
 {
     public async Task Handle(UpdateCompanyCommand request, CancellationToken ct)
     {
         var company = await companyRepository.GetTrackedAsync(request.Id, ct)
             ?? throw ValuationException.NotFound("Company not found.");
+
+        // A customer may only edit their own company; staff may edit any.
+        currentUser.RequireUserId();
+        if (!currentUser.IsStaff && company.Id != currentUser.CompanyId)
+            throw ValuationException.Forbidden("این شرکت متعلق به شما نیست.");
 
         if (!string.IsNullOrWhiteSpace(request.Name))
             company.Name = request.Name;

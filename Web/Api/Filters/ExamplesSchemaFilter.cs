@@ -102,12 +102,11 @@ public class ExamplesSchemaFilter : ISchemaFilter
         }
         else if (type == typeof(Application.Attempts.Commands.CreateAttempt.CreateAttemptCommand))
         {
+            // Owner and company are taken from the JWT, so they are not part of
+            // the request payload.
             schema.Example = new OpenApiObject
             {
-                ["versionId"] = new OpenApiString(Guid.NewGuid().ToString()),
-                ["userId"] = new OpenApiString(Guid.NewGuid().ToString()),
-                ["companyId"] = new OpenApiString(Guid.NewGuid().ToString()),
-                ["totalSteps"] = new OpenApiInteger(5)
+                ["versionId"] = new OpenApiString(Guid.NewGuid().ToString())
             };
         }
         else if (type == typeof(Application.Companies.Commands.CreateCompany.CreateCompanyCommand))

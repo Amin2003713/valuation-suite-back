@@ -9,10 +9,10 @@ public class GetAssessmentAttemptQuery : IRequest<AttemptResponse?>
     public Guid Id { get; set; }
 }
 
+/// <summary>The caller's own active attempt for a version (identity from the JWT).</summary>
 public class GetActiveAttemptQuery : IRequest<AttemptResponse?>
 {
     public Guid VersionId { get; set; }
-    public Guid UserId { get; set; }
 }
 
 public class GetAttemptAnswersQuery : IRequest<List<AnswerResponse>>
@@ -20,9 +20,9 @@ public class GetAttemptAnswersQuery : IRequest<List<AnswerResponse>>
     public Guid AttemptId { get; set; }
 }
 
+/// <summary>The caller's own attempt history (identity from the JWT).</summary>
 public class GetAssessmentHistoryQuery : IRequest<PagedResult<AttemptResponse>>
 {
-    public Guid UserId { get; set; }
     public int Page { get; set; } = 1;
     public int PageSize { get; set; } = 20;
 }

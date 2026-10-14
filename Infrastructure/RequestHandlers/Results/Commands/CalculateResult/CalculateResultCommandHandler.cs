@@ -7,13 +7,16 @@ public sealed class CalculateResultCommandHandler(
     IAssessmentResultCommandRepository resultRepository,
     IAssessmentAttemptCommandRepository attemptRepository,
     IAssessmentVersionQueryRepository versionRepository,
-    IQuestionEngine questionEngine
+    IQuestionEngine questionEngine,
+    ICurrentUserAccessor currentUser
 ) : IRequestHandler<CalculateResultCommand, Guid>
 {
     public async Task<Guid> Handle(CalculateResultCommand request, CancellationToken ct)
     {
         var attempt = await attemptRepository.GetTrackedAsync(request.AttemptId, ct)
             ?? throw ValuationException.NotFound("Attempt not found.");
+
+        currentUser.RequireOwnership(attempt.UserId);
 
         if (attempt.Status != Domain.Assessments.AttemptStatus.Completed)
             throw ValuationException.Conflict("Attempt must be completed before calculating a result.");

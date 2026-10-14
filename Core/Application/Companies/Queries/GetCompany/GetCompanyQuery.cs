@@ -13,7 +13,5 @@ public class GetCompanyBySlugQuery : IRequest<CompanyResponse?>
     public string Slug { get; set; } = default!;
 }
 
-public class GetMyCompanyQuery : IRequest<CompanyResponse?>
-{
-    public Guid UserId { get; set; }
-}
+/// <summary>The caller's own company (identity from the JWT).</summary>
+public class GetMyCompanyQuery : IRequest<CompanyResponse?>;

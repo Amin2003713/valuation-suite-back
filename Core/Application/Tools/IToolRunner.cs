@@ -52,6 +52,9 @@ public static class ToolInput
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         DictionaryKeyPolicy = JsonNamingPolicy.CamelCase,
+        // The know-how engine's documented NaN/Infinity quirks must serialize as
+        // named tokens (the client normalises them in parseBody).
+        NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals,
     };
 
     public static T Bind<T>(JsonElement input) where T : class

@@ -24,6 +24,19 @@ public sealed class HttpCurrentUserAccessor(IHttpContextAccessor accessor) : ICu
             return Guid.TryParse(value, out var id) ? id : Guid.Empty;
         }
     }
+
+    public Guid? CompanyId
+    {
+        get
+        {
+            var value = accessor.HttpContext?.User?.FindFirstValue("companyId");
+            return Guid.TryParse(value, out var id) ? id : null;
+        }
+    }
+
+    public bool IsStaff =>
+        Application.Admin.AdminRoles.All.Any(role =>
+            accessor.HttpContext?.User?.IsInRole(role) == true);
 }
 
 /// <summary>
@@ -165,7 +178,9 @@ public sealed class RunToolCommandHandler(
             request.ToolCode,
             outcome.Name,
             JsonSerializer.Serialize(WithRunForRemoved(request.Input)),
-            JsonSerializer.Serialize(outcome.Result),
+            // WriteOptions: engine results may carry the know-how NaN/Infinity
+            // quirks, which the default options refuse to serialise.
+            JsonSerializer.Serialize(outcome.Result, ToolInput.WriteOptions),
             outcome.OverallScore);
         submission.CompanyId = company.Id;
         submission.CompanyName = effectiveCompanyName;

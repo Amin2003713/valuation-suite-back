@@ -15,12 +15,21 @@ using Application.Assessments.Commands.UpdateStep;
 using Application.Assessments.Queries.GetAssessment;
 using Application.Assessments.Queries.GetAssessmentVersion;
 using Application.Questions.Queries.GetQuestionTypes;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Web.Api.Controllers;
 
+/// <summary>
+///     Assessment authoring surface (definitions, versions, steps, questions) plus
+///     its previews. This is content management, so it sits behind the same
+///     customers-manage permission as the admin tool-content endpoints instead of
+///     being open to every authenticated caller. Customer-facing tool flows use
+///     /api/tools, which has its own ownership checks.
+/// </summary>
 [ApiController]
 [Route("api/assessments")]
+[Authorize(Policy = "perm:customers.manage")]
 public class AssessmentsController : ApiBaseController
 {
     [HttpGet]

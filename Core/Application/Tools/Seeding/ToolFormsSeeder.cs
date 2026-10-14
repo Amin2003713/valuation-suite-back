@@ -66,6 +66,16 @@ public static class ToolFormsSeeder
             // Search runs client-side (Lens.org); the row exists so the run is
             // persisted as a submission and the paid adviser chat is offered.
             ["PATENT-SEARCH"] = (0, 200_000, "patent-search"),
+            // ── 2026 batch: fully free tools (client logic ported 1:1 to the backend).
+            // Advanced = 0 keeps every section visible — the tools have no paid tier.
+            ["BINOMIAL"] = (0, 150_000, "binomial-research-valuation"),
+            ["SOFT-VAL"] = (0, 250_000, "software-valuation-framework"),
+            ["RNPV"] = (0, 200_000, "rnpv-calculator"),
+            ["PVI"] = (0, 150_000, "patent-value-index"),
+            ["KNOWHOW-PRO"] = (0, 250_000, "knowhow-valuation-pro"),
+            ["EXPORT-READ"] = (0, 150_000, "export-readiness"),
+            ["DIGITAL-AI"] = (0, 150_000, "digital-ai-readiness"),
+            ["MATURITY"] = (0, 150_000, "maturity-assessment"),
         };
 
         public static (long Advanced, long Advice, string Route) For(string code) =>
@@ -245,6 +255,36 @@ public static class ToolFormsSeeder
                 translation = "MyMemory",
                 fields = new[] { "title1", "title2", "abstract1", "abstract2", "claim1", "claim2" },
             }), 7),
+
+        // ─────────────────── 2026 batch: ported client-side tools ───────────────────
+        ("BINOMIAL", "گزینه‌ای دوجمله‌ای پژوهش", "درخت دوجمله‌ای Cox–Ross–Rubinstein با اعمال آمریکایی", ToolKind.Calculator,
+            Json(new { defaults = new { S0 = 8000, K = 3000, T = 8, sigma = 0.35, r = 0.04, n = 5 }, ranges = new { nMin = 2, nMax = 8 } }), 18),
+
+        ("SOFT-VAL", "چارچوب ارزش‌گذاری نرم‌افزار", "۶ روش ارزش‌گذاری + WACC + Tornado + مونت‌کارلو", ToolKind.Calculator,
+            Json(new
+            {
+                stages = new[] { "idea", "mvp", "growth", "scale", "mature" },
+                industries = new[] { "enterprise", "fintech", "ecommerce", "health", "edtech", "media" },
+                defaults = new { productType = "saas", industry = "enterprise", stage = "mvp", scenario = "l", roy_scenario = "l" },
+            }), 19),
+
+        ("RNPV", "ارزش خالص تعدیل‌شده ریسک (rNPV)", "۵ مرحله بالینی + مایلستون‌ها + رویالتی و آستانه‌های فروش", ToolKind.Calculator,
+            Json(new { stages = 5, terms = new[] { "upfront", "m1", "m2", "m3", "m4", "m5", "royaltyRate", "peakSales", "discountRate", "th1", "sm1", "th2", "sm2" } }), 20),
+
+        ("PVI", "شاخص ارزش پتنت (PVI)", "امتیاز کیفی پتنت: ۳ گروه / ۱۵ پارامتر / ۳۷ زیرشاخص", ToolKind.Assessment,
+            Json(new { groups = 3, paramCount = 15, leaves = 37, scale = 10, bands = new[] { 80, 65, 50, 35 } }), 21),
+
+        ("KNOWHOW-PRO", "ارزش‌گذاری دانش فنی (پیشرفته)", "بازتولید/جایگزینی + DCF + RFR + مازاد درآمد + بازار + تطبیق وزنی", ToolKind.Calculator,
+            Json(new { currency = "ریال", scenarios = new[] { "pess", "likely", "opt" }, monteCarloRuns = 5000 }), 22),
+
+        ("EXPORT-READ", "آمادگی صادراتی", "۱۱ حوزه / ۶۶ سؤال با وزن‌بندی و اولویت‌بندی بهبود", ToolKind.Assessment,
+            Json(new { domains = 11, questionsPerDomain = 6, scale = 5 }), 23),
+
+        ("DIGITAL-AI", "بلوغ دیجیتال و آمادگی AI", "۲۴ پرسش کلی + ۲۴ شاخص تخصصی با هشدار قرمز/زرد", ToolKind.Assessment,
+            Json(new { sections = new[] { "D", "A" }, questions = 24, indicators = 24, coverageOk = 0.75 }), 24),
+
+        ("MATURITY", "سنجش بلوغ و آمادگی سازمان", "۱۰ حوزه / ۶۰ شاخص با ضریب شواهد و گیت شروط حیاتی", ToolKind.Assessment,
+            Json(new { domains = 10, questions = 60, evidenceOptions = new[] { "بدون مدرک", "مدرک محدود یا قدیمی", "مدرک معتبر و جاری" } }), 25),
     ];
 
     private static object[] IdeaQuestions() =>

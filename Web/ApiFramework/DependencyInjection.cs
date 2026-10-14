@@ -32,7 +32,10 @@ public static class DependencyInjection
         app.MapControllers();
 
         // Simple liveness/readiness probe for Docker / orchestrators.
+        // Anonymous on purpose: probes have no token, and the fallback policy
+        // would otherwise require authentication for every endpoint.
         app.MapGet("/health", () => Results.Ok(new { status = "healthy", timestamp = DateTime.UtcNow }))
+            .AllowAnonymous()
             .WithTags("health")
             .ExcludeFromDescription();
 

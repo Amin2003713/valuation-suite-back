@@ -5,13 +5,16 @@ namespace RequestHandlers.Attempts.Commands.SyncAnswers;
 
 public sealed class SyncAnswersCommandHandler(
     IAssessmentAttemptCommandRepository attemptRepository,
-    IAssessmentVersionQueryRepository versionRepository
+    IAssessmentVersionQueryRepository versionRepository,
+    ICurrentUserAccessor currentUser
 ) : IRequestHandler<SyncAnswersCommand, SyncAnswersResponse>
 {
     public async Task<SyncAnswersResponse> Handle(SyncAnswersCommand request, CancellationToken ct)
     {
         var attempt = await attemptRepository.GetTrackedAsync(request.AttemptId, ct)
             ?? throw ValuationException.NotFound("Attempt not found.");
+
+        currentUser.RequireOwnership(attempt.UserId);
 
         if (attempt.Status != Domain.Assessments.AttemptStatus.InProgress)
             throw ValuationException.Conflict("Attempt is no longer in progress.");

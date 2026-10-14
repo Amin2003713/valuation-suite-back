@@ -66,6 +66,25 @@ public class Program
         builder.Services.AddPersistence(builder.Configuration);
         builder.Services.AddHandlers();
 
+        // Tool reference tables, bands and thresholds for the math engines.
+        // Defaults live in code; any "Tools:*" appsettings section can override them.
+        builder.Services.Configure<Application.Tools.Options.PviOptions>(
+            builder.Configuration.GetSection(Application.Tools.Options.PviOptions.SectionName));
+        builder.Services.Configure<Application.Tools.Options.DigitalAiOptions>(
+            builder.Configuration.GetSection(Application.Tools.Options.DigitalAiOptions.SectionName));
+        builder.Services.Configure<Application.Tools.Options.MaturityOptions>(
+            builder.Configuration.GetSection(Application.Tools.Options.MaturityOptions.SectionName));
+        builder.Services.Configure<Application.Tools.Options.ExportReadinessOptions>(
+            builder.Configuration.GetSection(Application.Tools.Options.ExportReadinessOptions.SectionName));
+        builder.Services.Configure<Application.Tools.Options.RnpvOptions>(
+            builder.Configuration.GetSection(Application.Tools.Options.RnpvOptions.SectionName));
+        builder.Services.Configure<Application.Tools.Options.BinomialOptions>(
+            builder.Configuration.GetSection(Application.Tools.Options.BinomialOptions.SectionName));
+        builder.Services.Configure<Application.Tools.Options.SvfOptions>(
+            builder.Configuration.GetSection(Application.Tools.Options.SvfOptions.SectionName));
+        builder.Services.Configure<Application.Tools.Options.KnowhowOptions>(
+            builder.Configuration.GetSection(Application.Tools.Options.KnowhowOptions.SectionName));
+
         // Current-user accessor used by tool handlers (composition root wiring)
         builder.Services.AddScoped<Application.Interfaces.ICurrentUserAccessor, RequestHandlers.Tools.HttpCurrentUserAccessor>();
 
@@ -90,7 +109,17 @@ public class Program
                 };
             });
         builder.Services.AddAuthorization(options =>
-            Application.Admin.PermissionPolicies.AddPolicies(options));
+        {
+            Application.Admin.PermissionPolicies.AddPolicies(options);
+
+            // Default-deny: every endpoint requires an authenticated caller unless it
+            // opts out with [AllowAnonymous]. Public endpoints are the explicit
+            // exceptions (register/login, tool catalog/form, payment callback,
+            // /health), so a new controller can never be silently anonymous.
+            options.FallbackPolicy = new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder()
+                .RequireAuthenticatedUser()
+                .Build();
+        });
 
         // ---- Admin bootstrap (roles + first admin from appsettings) ----
         builder.Services.AddScoped<Application.Admin.AdminBootstrapper>();

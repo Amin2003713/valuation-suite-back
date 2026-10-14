@@ -14,12 +14,15 @@ public sealed class GetCompanyBySlugQueryHandler(
 }
 
 public sealed class GetMyCompanyQueryHandler(
-    IUserQueryRepository userRepository
+    IUserQueryRepository userRepository,
+    ICurrentUserAccessor currentUser
 ) : IRequestHandler<GetMyCompanyQuery, CompanyResponse?>
 {
     public async Task<CompanyResponse?> Handle(GetMyCompanyQuery request, CancellationToken ct)
     {
-        var user = await userRepository.GetWithCompanyAsync(request.UserId, ct);
+        // Always the caller's own company — the user id is not client-supplied.
+        var userId = currentUser.RequireUserId();
+        var user = await userRepository.GetWithCompanyAsync(userId, ct);
         return user?.Company is null ? null : user.Company.ToCompanyResponse();
     }
 }
