@@ -7,6 +7,8 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using System.Text.RegularExpressions;
+using Application.Interfaces.Base;
+using Domain.Companies;
 using Web.Api.Dto;
 using Web.Api.Services;
 
@@ -18,7 +20,8 @@ public class AuthController(
     UserManager<ApplicationUser> userManager,
     TokenService tokenService,
     IMediator mediator,
-    Application.Interfaces.Base.ICommandRepository<Domain.Companies.Company> companyCommands) : ControllerBase
+    ICommandRepository<Company> companyCommands
+) : ControllerBase
 {
     [HttpPost("register")]
     [AllowAnonymous]
@@ -40,6 +43,7 @@ public class AuthController(
         };
 
         var result = await userManager.CreateAsync(user, request.Password);
+
         if (!result.Succeeded)
         {
             var errors = string.Join(" | ", result.Errors.Select(e => e.Description));
@@ -50,12 +54,14 @@ public class AuthController(
 
         // Optional company registration at sign-up (users register their company too).
         Domain.Companies.Company? createdCompany = null;
+
         if (!string.IsNullOrWhiteSpace(request.CompanyName))
         {
             var slug = Slugify(request.CompanyName);
             createdCompany = Domain.Companies.Company.Create(request.CompanyName.Trim(), slug);
             if (!string.IsNullOrWhiteSpace(request.Industry))
                 createdCompany.SetIndustry(request.Industry.Trim());
+
             await companyCommands.AddAsync(createdCompany, ct, saveNow: true);
             user.CompanyId = createdCompany.Id;
             await userManager.UpdateAsync(user);
@@ -72,7 +78,7 @@ public class AuthController(
     public async Task<ActionResult<AuthResponse>> Login([FromBody] LoginRequest request, CancellationToken ct)
     {
         var email = request.Email.Trim().ToLowerInvariant();
-        var user = await userManager.FindByEmailAsync(email);
+        var user  = await userManager.FindByEmailAsync(email);
 
         if (user is null || !user.IsActive)
             throw new ForbiddenException("کاربری با این ایمیل وجود ندارد یا غیرفعال است");
@@ -98,8 +104,7 @@ public class AuthController(
         if (userId == Guid.Empty)
             throw new ForbiddenException("دسترسی غیرمجاز");
 
-        var user = await userManager.FindByIdAsync(userId.ToString())
-            ?? throw new NotFoundException("کاربر یافت نشد");
+        var user = await userManager.FindByIdAsync(userId.ToString()) ?? throw new NotFoundException("کاربر یافت نشد");
 
         var roles = await userManager.GetRolesAsync(user);
 
@@ -127,7 +132,12 @@ public class AuthController(
     public async Task<IActionResult> UpdateProfile([FromBody] UpdateProfileRequest request, CancellationToken ct)
         => Ok(await mediator.Send(new UpdateMyProfileCommand(request.DisplayName, request.PhoneNumber, request.CompanyName, request.Industry), ct));
 
-    public record UpdateProfileRequest(string? DisplayName, string? PhoneNumber, string? CompanyName, string? Industry);
+    public record UpdateProfileRequest(
+        string? DisplayName,
+        string? PhoneNumber,
+        string? CompanyName,
+        string? Industry
+    );
 
     private AuthResponse BuildAuthResponse(
         ApplicationUser user,
@@ -159,9 +169,10 @@ public class AuthController(
     private static string Slugify(string name)
     {
         var normalized = name.Trim().ToLowerInvariant();
-        var slug = Regex.Replace(normalized, @"[^a-z0-9\u0600-\u06FF]+", "-").Trim('-');
+        var slug       = Regex.Replace(normalized, @"[^a-z0-9\u0600-\u06FF]+", "-").Trim('-');
         if (string.IsNullOrEmpty(slug))
             slug = $"co-{Guid.NewGuid().ToString("N")[..8]}";
+
         return $"{slug}-{Guid.NewGuid().ToString("N")[..6]}";
     }
 }

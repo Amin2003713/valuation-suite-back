@@ -25,27 +25,31 @@ public class Program
 
         builder.Services.AddSwaggerGen(c =>
         {
-            c.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo
-            {
-                Title = "Valuation Suite API",
-                Version = "v1",
-                Description = "Backend API for Valuation Suite - IP Assessment, WIPO Diagnostics, Idea Assessment, Job Evaluation, and more"
-            });
+            c.SwaggerDoc("v1",
+                new Microsoft.OpenApi.Models.OpenApiInfo
+                {
+                    Title = "Valuation Suite API",
+                    Version = "v1",
+                    Description = "Backend API for Valuation Suite - IP Assessment, WIPO Diagnostics, Idea Assessment, Job Evaluation, and more"
+                });
+
             c.OperationFilter<ExamplesOperationFilter>();
             c.SchemaFilter<ExamplesSchemaFilter>();
             c.IgnoreObsoleteActions();
             c.CustomSchemaIds(t => t.FullName);
 
             // JWT bearer support in Swagger UI
-            c.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
-            {
-                Name = "Authorization",
-                Type = Microsoft.OpenApi.Models.SecuritySchemeType.Http,
-                Scheme = "bearer",
-                BearerFormat = "JWT",
-                In = Microsoft.OpenApi.Models.ParameterLocation.Header,
-                Description = "Enter your JWT token (from /api/auth/login) below."
-            });
+            c.AddSecurityDefinition("Bearer",
+                new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+                {
+                    Name = "Authorization",
+                    Type = Microsoft.OpenApi.Models.SecuritySchemeType.Http,
+                    Scheme = "bearer",
+                    BearerFormat = "JWT",
+                    In = Microsoft.OpenApi.Models.ParameterLocation.Header,
+                    Description = "Enter your JWT token (from /api/auth/login) below."
+                });
+
             c.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
             {
                 {
@@ -70,18 +74,25 @@ public class Program
         // Defaults live in code; any "Tools:*" appsettings section can override them.
         builder.Services.Configure<Application.Tools.Options.PviOptions>(
             builder.Configuration.GetSection(Application.Tools.Options.PviOptions.SectionName));
+
         builder.Services.Configure<Application.Tools.Options.DigitalAiOptions>(
             builder.Configuration.GetSection(Application.Tools.Options.DigitalAiOptions.SectionName));
+
         builder.Services.Configure<Application.Tools.Options.MaturityOptions>(
             builder.Configuration.GetSection(Application.Tools.Options.MaturityOptions.SectionName));
+
         builder.Services.Configure<Application.Tools.Options.ExportReadinessOptions>(
             builder.Configuration.GetSection(Application.Tools.Options.ExportReadinessOptions.SectionName));
+
         builder.Services.Configure<Application.Tools.Options.RnpvOptions>(
             builder.Configuration.GetSection(Application.Tools.Options.RnpvOptions.SectionName));
+
         builder.Services.Configure<Application.Tools.Options.BinomialOptions>(
             builder.Configuration.GetSection(Application.Tools.Options.BinomialOptions.SectionName));
+
         builder.Services.Configure<Application.Tools.Options.SvfOptions>(
             builder.Configuration.GetSection(Application.Tools.Options.SvfOptions.SectionName));
+
         builder.Services.Configure<Application.Tools.Options.KnowhowOptions>(
             builder.Configuration.GetSection(Application.Tools.Options.KnowhowOptions.SectionName));
 
@@ -103,24 +114,12 @@ public class Program
                     ValidIssuer = builder.Configuration["Jwt:Issuer"],
                     ValidAudience = builder.Configuration["Jwt:Audience"],
                     IssuerSigningKey = new SymmetricSecurityKey(
-                        Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]
-                            ?? throw new InvalidOperationException("Jwt:Key is not configured"))),
+                        Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"] ?? throw new InvalidOperationException("Jwt:Key is not configured"))),
                     ClockSkew = TimeSpan.FromMinutes(1),
                 };
             });
-        builder.Services.AddAuthorization(options =>
-        {
-            Application.Admin.PermissionPolicies.AddPolicies(options);
 
-            // Default-deny: every endpoint requires an authenticated caller unless it
-            // opts out with [AllowAnonymous]. Public endpoints are the explicit
-            // exceptions (register/login, tool catalog/form, payment callback,
-            // /health), so a new controller can never be silently anonymous.
-            options.FallbackPolicy = new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder()
-                .RequireAuthenticatedUser()
-                .Build();
-        });
-
+        builder.Services.AddAuthorization(Application.Admin.PermissionPolicies.AddPolicies);
         // ---- Admin bootstrap (roles + first admin from appsettings) ----
         builder.Services.AddScoped<Application.Admin.AdminBootstrapper>();
 
@@ -158,8 +157,9 @@ public class Program
                 // SQL Server (local/dev default): apply EF migrations.
                 // SQLite (Docker profile): no portable migrations — generate the
                 // schema from the model instead, then seeding runs identically.
-                var db = scope.ServiceProvider.GetRequiredService<Persistence.DbContexts.ValuationDbContext>();
+                var db      = scope.ServiceProvider.GetRequiredService<Persistence.DbContexts.ValuationDbContext>();
                 var markers = scope.ServiceProvider.GetRequiredService<Persistence.DependencyInjection.DbInitMarkers>();
+
                 if (markers.Provider.Equals("Sqlite", StringComparison.OrdinalIgnoreCase))
                 {
                     logger.LogInformation("Database:Provider=Sqlite — ensuring database created from model...");
@@ -175,11 +175,14 @@ public class Program
 
                 await scope.ServiceProvider.GetRequiredService<Application.Assessments.Seeding.IpAssessmentSeederRunner>()
                     .RunAsync();
+
                 await Application.Tools.Seeding.ToolFormsSeeder.SeedAsync(
-                    scope.ServiceProvider.GetRequiredService<Application.Tools.Seeding.IToolFormsDbContext>(), logger);
+                    scope.ServiceProvider.GetRequiredService<Application.Tools.Seeding.IToolFormsDbContext>(),
+                    logger);
 
                 await Application.Tools.Seeding.ToolQuestionsSeeder.SeedAsync(
-                    scope.ServiceProvider.GetRequiredService<Application.Tools.Seeding.IToolFormsDbContext>(), logger);
+                    scope.ServiceProvider.GetRequiredService<Application.Tools.Seeding.IToolFormsDbContext>(),
+                    logger);
 
                 await scope.ServiceProvider.GetRequiredService<Application.Admin.AdminBootstrapper>().RunAsync();
             }
@@ -189,6 +192,6 @@ public class Program
             }
         }
 
-        app.Run();
+        await app.RunAsync();
     }
 }

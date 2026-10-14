@@ -12,7 +12,7 @@ public static class ApplicationConstant
 public class AppOptions
 {
     public string ConnectionString { get; set; } =
-        "Server=localhost,5012;Database=ValuationSuite;Trusted_Connection=True;TrustServerCertificate=True;";
+        "Server=localhost,5012;Database=ValuationSuite;User Id=sa;Password=Iu%7D%3A-%2Bw6eP%5EOY*qhgFtpwRAF;TrustServerCertificate=True;MultipleActiveResultSets=true;";
 
     public string SwaggerPath { get; set; } = "api/swagger/v1/swagger.json";
 
