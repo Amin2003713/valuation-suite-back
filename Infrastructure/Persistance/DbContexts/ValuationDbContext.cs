@@ -56,6 +56,11 @@ public ValuationDbContext(
 
         // 4. Configurations from the persistence assembly + conventions and global filters.
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(ValuationDbContext).Assembly);
+
+        // 4b. Per-tool submission tables: one table per tool code, all sharing the
+        //     ToolSubmissionBase column/index/FK definition (see ToolSubmissionModel).
+        Configurations.ToolSubmissionModel.Configure(modelBuilder);
+
         modelBuilder.AddPluralizingTableNameConvention();
         modelBuilder.AddDecimalConvention();
         modelBuilder.AddGlobalIsActiveFilter();

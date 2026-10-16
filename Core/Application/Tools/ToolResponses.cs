@@ -8,7 +8,8 @@ public record ToolFormSummary(
     int SortOrder,
     string Route,
     long AdvancedPriceToman,
-    long AdvicePriceToman);
+    long AdvicePriceToman,
+    string Lang);
 
 public record ToolFormResponse(
     string ToolCode,
@@ -18,7 +19,8 @@ public record ToolFormResponse(
     JsonElement Schema,
     string Route,
     long AdvancedPriceToman,
-    long AdvicePriceToman);
+    long AdvicePriceToman,
+    string Lang);
 
 public record ToolRunResponse(
     Guid SubmissionId,
@@ -34,4 +36,6 @@ public record ToolSubmissionResponse(
     JsonElement Input,
     JsonElement Result,
     double? OverallScore,
-    DateTime CreatedAt);
+    DateTime CreatedAt,
+    string Language,
+    string Status);

@@ -23,6 +23,7 @@ public sealed class ToolForm : BaseEntity
     public ToolKind Kind { get; set; }
     /// <summary>JSON document with defaults, field metadata and static reference tables.</summary>
     public string SchemaJson { get; set; } = "{}";
+
     public int SortOrder { get; set; }
 
     /// <summary>Toman price to unlock the tool's *advanced* result sections. 0 = free advanced.</summary>

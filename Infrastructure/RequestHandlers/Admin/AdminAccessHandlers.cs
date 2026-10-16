@@ -112,7 +112,7 @@ public sealed class UpsertAdminPackageCommandHandler(ICommandRepository<AccessPa
 /// </summary>
 public sealed class AddSubmissionNoteCommandHandler(
     ICommandRepository<SubmissionNote> notes,
-    IQueryRepository<ToolSubmission> submissions,
+    Application.Interfaces.IToolSubmissionQueries submissions,
     ICurrentUserAccessor currentUser)
     : IRequestHandler<AddSubmissionNoteCommand, AdminNoteRow>
 {
@@ -125,7 +125,7 @@ public sealed class AddSubmissionNoteCommandHandler(
         if (string.IsNullOrWhiteSpace(request.Text) && string.IsNullOrWhiteSpace(request.AudioBase64))
             throw ValuationException.BadRequest("یادداشت متنی یا ویس الزامی است.");
 
-        if (!await submissions.TableNoTracking.AnyAsync(s => s.Id == request.SubmissionId, ct))
+        if (!await submissions.All.AnyAsync(s => s.Id == request.SubmissionId, ct))
             throw ValuationException.NotFound("پاسخ یافت نشد.");
 
         var note = SubmissionNote.Create(
@@ -144,7 +144,7 @@ public sealed class AddSubmissionNoteCommandHandler(
 /// </summary>
 public sealed class AddCustomerReplyCommandHandler(
     ICommandRepository<SubmissionNote> notes,
-    IQueryRepository<ToolSubmission> submissions,
+    Application.Interfaces.IToolSubmissionQueries submissions,
     IQueryRepository<Payment> payments,
     ICurrentUserAccessor currentUser)
     : IRequestHandler<AddCustomerReplyCommand, AdminNoteRow>
@@ -158,7 +158,7 @@ public sealed class AddCustomerReplyCommandHandler(
         if (string.IsNullOrWhiteSpace(request.Text))
             throw ValuationException.BadRequest("متن پیام الزامی است.");
 
-        var sub = await submissions.TableNoTracking
+        var sub = await submissions.All
             .FirstOrDefaultAsync(s => s.Id == request.SubmissionId, ct)
             ?? throw ValuationException.NotFound("پاسخ یافت نشد.");
 
@@ -220,7 +220,7 @@ public sealed class GetSubmissionNotesQueryHandler(ICommandRepository<Submission
 ///     returns the whole thread plus entitlement (purchased / can reply).
 /// </summary>
 public sealed class GetMySubmissionNotesQueryHandler(
-    IQueryRepository<ToolSubmission> submissions,
+    Application.Interfaces.IToolSubmissionQueries submissions,
     ICommandRepository<SubmissionNote> notes,
     IQueryRepository<Payment> payments,
     ICurrentUserAccessor currentUser)
@@ -232,7 +232,7 @@ public sealed class GetMySubmissionNotesQueryHandler(
         if (userId == Guid.Empty)
             throw ValuationException.Forbidden("دسترسی غیرمجاز.");
 
-        var sub = await submissions.TableNoTracking
+        var sub = await submissions.All
             .FirstOrDefaultAsync(s => s.Id == request.SubmissionId, ct)
             ?? throw ValuationException.NotFound("پاسخ یافت نشد.");
 
@@ -279,7 +279,7 @@ public sealed class GetMySubmissionNotesQueryHandler(
 ///     then simply renders nothing instead of an empty buy box.
 /// </summary>
 public sealed class GetMyToolAdviceThreadQueryHandler(
-    IQueryRepository<ToolSubmission> submissions,
+    Application.Interfaces.IToolSubmissionQueries submissions,
     IQueryRepository<SubmissionNote> notes,
     IQueryRepository<Payment> payments,
     ICurrentUserAccessor currentUser)
@@ -291,8 +291,8 @@ public sealed class GetMyToolAdviceThreadQueryHandler(
         if (userId == Guid.Empty)
             throw ValuationException.Forbidden("دسترسی غیرمجاز.");
 
-        var subIds = await submissions.TableNoTracking
-            .Where(s => s.UserId == userId && s.ToolCode == request.ToolCode)
+        var subIds = await submissions.ByTool(request.ToolCode)
+            .Where(s => s.UserId == userId)
             .OrderByDescending(s => s.CreatedAt)
             .Select(s => s.Id)
             .ToListAsync(ct);

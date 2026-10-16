@@ -28,7 +28,7 @@ public class AdminQueryRepository(ReadOnlyDbContext dbContext) : IAdminQueryRepo
 
         var users = Db.Users.AsNoTracking();
         var payments = Db.Set<Payment>().AsNoTracking();
-        var submissions = Db.Set<ToolSubmission>().AsNoTracking();
+        var submissions = ToolSubmissionQuery.All(Db);
 
         /* One grouped query per table instead of N separate COUNT/SCAN round-trips:
          * users → 4 counters, payments → status split + paid total,
@@ -118,7 +118,7 @@ public class AdminQueryRepository(ReadOnlyDbContext dbContext) : IAdminQueryRepo
         /* Aggregates for the page's users in ONE grouped query per table,
          * instead of a correlated COUNT/SUM subquery per row (N+1 → 2). */
         var ids = baseRows.Select(u => u.Id).ToList();
-        var subsByUser = await Db.Set<ToolSubmission>().AsNoTracking()
+        var subsByUser = await ToolSubmissionQuery.All(Db)
             .Where(s => ids.Contains(s.UserId))
             .GroupBy(s => s.UserId)
             .Select(g => new { UserId = g.Key, Count = g.Count() })
@@ -166,7 +166,7 @@ public class AdminQueryRepository(ReadOnlyDbContext dbContext) : IAdminQueryRepo
                 u.CompanyId,
                 u.Company != null ? u.Company.Name : null,
                 u.CreatedAt, u.LastLoginAt,
-                Db.Set<ToolSubmission>().Count(s => s.UserId == u.Id),
+                ToolSubmissionQuery.All(Db).Count(s => s.UserId == u.Id),
                 Db.Set<Payment>()
                     .Where(pay => pay.UserId == u.Id && pay.Status == PaymentStatus.Paid)
                     .Sum(pay => (long?)pay.Amount) ?? 0,
@@ -215,7 +215,7 @@ public class AdminQueryRepository(ReadOnlyDbContext dbContext) : IAdminQueryRepo
         var dayStart = new DateTime(since.Year, since.Month, since.Day, 0, 0, 0, DateTimeKind.Utc);
 
         // Submissions per day — grouped fully in SQL (no raw timestamps pulled).
-        var subStamps = await Db.Set<ToolSubmission>().AsNoTracking()
+        var subStamps = await ToolSubmissionQuery.All(Db)
             .Where(s => s.CreatedAt >= dayStart)
             .GroupBy(s => new { s.CreatedAt.Year, s.CreatedAt.Month, s.CreatedAt.Day })
             .Select(g => new { g.Key.Year, g.Key.Month, g.Key.Day, Count = g.Count() })
@@ -240,7 +240,7 @@ public class AdminQueryRepository(ReadOnlyDbContext dbContext) : IAdminQueryRepo
             .ToList();
 
         // Score distribution across all submissions (buckets of 10, grouped in SQL).
-        var scoreRows = await Db.Set<ToolSubmission>().AsNoTracking()
+        var scoreRows = await ToolSubmissionQuery.All(Db)
             .Where(s => s.OverallScore != null)
             .GroupBy(s => (int)(s.OverallScore!.Value / 10))
             .Select(g => new { Bucket = g.Key, Count = g.Count() })
@@ -305,7 +305,7 @@ public class AdminQueryRepository(ReadOnlyDbContext dbContext) : IAdminQueryRepo
         // conversations (customer sent the latest message) form the working queue;
         // answered threads (staff replied last) are still listed so nothing ever
         // "disappears" after answering — the UI greys them out under "answered".
-        return await Db.Set<ToolSubmission>().AsNoTracking()
+        return await ToolSubmissionQuery.All(Db)
             .Where(s => Db.Set<Payment>().Any(p =>
                 p.SubmissionId == s.Id && p.Kind == PaymentKind.Advice && p.Status == PaymentStatus.Paid))
             .OrderByDescending(s => s.CreatedAt)
@@ -337,7 +337,7 @@ public class AdminQueryRepository(ReadOnlyDbContext dbContext) : IAdminQueryRepo
 
     public async Task<List<AdminSubmissionRow>> GetSubmissionsAsync(Guid userId, int take, CancellationToken ct = default)
     {
-        return await Db.Set<ToolSubmission>().AsNoTracking()
+        return await ToolSubmissionQuery.All(Db)
             .Where(s => s.UserId == userId)
             .OrderByDescending(s => s.CreatedAt)
             .Take(take)
@@ -356,7 +356,7 @@ public class AdminQueryRepository(ReadOnlyDbContext dbContext) : IAdminQueryRepo
     public async Task<(List<AdminSubmissionRow> Items, int TotalCount)> SearchSubmissionsAsync(
         int page, int pageSize, string? toolCode, string? search, Guid? userId, CancellationToken ct = default)
     {
-        var query = Db.Set<ToolSubmission>().AsNoTracking();
+        var query = ToolSubmissionQuery.All(Db);
 
         if (!string.IsNullOrWhiteSpace(toolCode))
             query = query.Where(s => s.ToolCode == toolCode);
@@ -400,13 +400,13 @@ public class AdminQueryRepository(ReadOnlyDbContext dbContext) : IAdminQueryRepo
             .Select(t => new { t.ToolCode, t.Title, t.Kind })
             .ToListAsync(ct);
 
-        var uses = await Db.Set<ToolSubmission>().AsNoTracking()
+        var uses = await ToolSubmissionQuery.All(Db)
             .GroupBy(s => s.ToolCode)
             .Select(g => new { ToolCode = g.Key, Uses = g.Count() })
             .ToListAsync(ct);
         var usesMap = uses.ToDictionary(u => u.ToolCode, u => (long)u.Uses);
 
-        var pairs = await Db.Set<ToolSubmission>().AsNoTracking()
+        var pairs = await ToolSubmissionQuery.All(Db)
             .Select(s => new { s.ToolCode, s.UserId })
             .Distinct()
             .ToListAsync(ct);
@@ -483,12 +483,12 @@ public class AdminQueryRepository(ReadOnlyDbContext dbContext) : IAdminQueryRepo
         /* Single grouped query for uses; distinct users computed from a grouped
          * SQL projection (GROUP BY toolCode, userId) rather than pulling every
          * distinct pair into memory. */
-        var uses = await Db.Set<ToolSubmission>().AsNoTracking()
+        var uses = await ToolSubmissionQuery.All(Db)
             .GroupBy(s => s.ToolCode)
             .Select(g => new { ToolCode = g.Key, Uses = g.Count() })
             .ToListAsync(ct);
 
-        var distinctPairs = await Db.Set<ToolSubmission>().AsNoTracking()
+        var distinctPairs = await ToolSubmissionQuery.All(Db)
             .GroupBy(s => new { s.ToolCode, s.UserId })
             .Select(g => new { g.Key.ToolCode })
             .ToListAsync(ct);
@@ -545,7 +545,7 @@ public class AdminQueryRepository(ReadOnlyDbContext dbContext) : IAdminQueryRepo
                     .Join(Db.Roles, ur => ur.RoleId, r => r.Id, (ur, r) => r.Name!)
                     .ToList(),
                 new List<string>(),
-                Db.Set<ToolSubmission>().LongCount(s => s.UserId == u.Id)))
+                ToolSubmissionQuery.All(Db).LongCount(s => s.UserId == u.Id)))
             .ToListAsync(ct);
 
         return (items, (int)total);
@@ -566,7 +566,7 @@ public class AdminQueryRepository(ReadOnlyDbContext dbContext) : IAdminQueryRepo
                 Db.Set<Payment>()
                     .Where(pay => pay.UserId == u.Id && pay.Status == PaymentStatus.Paid)
                     .Sum(pay => (long?)pay.Amount) ?? 0,
-                Db.Set<ToolSubmission>().Count(s => s.UserId == u.Id)))
+                ToolSubmissionQuery.All(Db).Count(s => s.UserId == u.Id)))
             .ToListAsync(ct);
     }
 }

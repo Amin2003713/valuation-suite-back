@@ -6,8 +6,11 @@ using Microsoft.AspNetCore.Http;
 using System.Security.Claims;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Application.Common;
 using Application.Interfaces;
 using Application.Interfaces.Base;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace RequestHandlers.Tools;
 
@@ -103,8 +106,11 @@ public static class AdvancedSections
 
 public sealed class RunToolCommandHandler(
     IToolRunnerResolver resolver,
-    ICommandRepository<ToolSubmission> submissions,
+    IToolSubmissionStore submissions,
+    IToolQuestionQueries questions,
     IEntitlementService entitlements,
+    ILanguageResolver languages,
+    IOptions<LanguageOptions> languageOptions,
     ICurrentUserAccessor currentUser,
     IQueryRepository<Domain.Users.ApplicationUser> usersQueries,
     ICompanyQueryRepository companyQueries) : IRequestHandler<RunToolCommand, ToolRunResponse>
@@ -155,6 +161,14 @@ public sealed class RunToolCommandHandler(
             ? request.Input
             : WithRunForRemoved(request.Input);
 
+        /* Server-side answer validation against the tool's stored questions
+         * (required / answer type / option values / scale bounds). Row-driven:
+         * a no-op for tools without question rows (calculators, search). */
+        var questionRows = await questions.ByTool(request.ToolCode)
+            .OrderBy(q => q.SortOrder)
+            .ToListAsync(ct);
+        ToolAnswerValidator.Validate(request.ToolCode, inputForStorage, questionRows);
+
         var runner = resolver.Resolve(request.ToolCode);
         var outcome = runner.Run(inputForStorage);
 
@@ -173,20 +187,24 @@ public sealed class RunToolCommandHandler(
                 outcome.OverallScore,
                 advancedIncluded);
 
-        var submission = ToolSubmission.Create(
-            effectiveUserId,
+        /* One submissions table per tool: instantiate the tool's own row type
+         * (ToolSubmissionRegistry) — the shared columns come from ToolSubmissionBase —
+         * and stamp the run's language and status. */
+        var submission = ToolRegistry.CreateSubmission(
             request.ToolCode,
+            effectiveUserId,
             outcome.Name,
             JsonSerializer.Serialize(WithRunForRemoved(request.Input)),
             // WriteOptions: engine results may carry the know-how NaN/Infinity
             // quirks, which the default options refuse to serialise.
             JsonSerializer.Serialize(outcome.Result, ToolInput.WriteOptions),
-            outcome.OverallScore);
+            outcome.OverallScore,
+            ResolveRunLanguage(request.Input));
         submission.CompanyId = company.Id;
         submission.CompanyName = effectiveCompanyName;
         submission.Industry = effectiveIndustry;
 
-        await submissions.AddAsync(submission, ct, saveNow: true);
+        await submissions.AddAsync(submission, ct);
 
         return new ToolRunResponse(
             submission.Id,
@@ -224,6 +242,18 @@ public sealed class RunToolCommandHandler(
             return false;
 
         return companyId is null || companyId == Guid.Empty || user.CompanyId == companyId;
+    }
+
+    /// <summary>Run language: the input's lang when it is supported, else the request language.</summary>
+    private string ResolveRunLanguage(JsonElement input)
+    {
+        if (input.ValueKind == JsonValueKind.Object &&
+            input.TryGetProperty("lang", out var l) &&
+            l.ValueKind == JsonValueKind.String &&
+            languageOptions.Value.IsSupported(l.GetString()))
+            return languageOptions.Value.Normalize(l.GetString());
+
+        return languages.Lang;
     }
 
     /// <summary>Reads runFor from the input body (client sends it inline) and removes it from the engine input.</summary>

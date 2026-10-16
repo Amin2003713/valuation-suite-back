@@ -28,11 +28,32 @@ public sealed class ToolQuestion : BaseEntity
     /// <summary>JSON array of {value,label} option rows; "[]" when the question is free-form/scored.</summary>
     public string OptionsJson { get; set; } = "[]";
 
+    /// <summary>Placeholder shown in the input (default language = fa base column).</summary>
+    public string? Placeholder { get; set; }
+
+    /// <summary>Help/hint text shown under the question (default language = fa base column).</summary>
+    public string? HelpText { get; set; }
+
+    /// <summary>
+    ///     Answer shape used for server-side validation of submitted input:
+    ///     "scale" | "number" (numeric, bounds in <see cref="ScaleMin"/>/<see cref="ScaleMax"/>),
+    ///     "choice" (one of the option values), "multi" (array of option values), "text".
+    /// </summary>
+    public string AnswerType { get; set; } = "text";
+
+    /// <summary>True when the runner requires an answer for this key (validated server-side).</summary>
+    public bool IsRequired { get; set; }
+
+    public int? ScaleMin { get; set; }
+    public int? ScaleMax { get; set; }
+
     public int SortOrder { get; set; }
 
     public static ToolQuestion Create(
         string toolCode, string questionId, string? sectionKey, string? sectionTitle,
-        string text, string optionsJson, int sortOrder) =>
+        string text, string optionsJson, int sortOrder,
+        string? placeholder = null, string? helpText = null,
+        string answerType = "text", bool isRequired = false, int? scaleMin = null, int? scaleMax = null) =>
         new()
         {
             ToolCode = toolCode,
@@ -41,6 +62,12 @@ public sealed class ToolQuestion : BaseEntity
             SectionTitle = sectionTitle,
             Text = text,
             OptionsJson = string.IsNullOrWhiteSpace(optionsJson) ? "[]" : optionsJson,
+            Placeholder = placeholder,
+            HelpText = helpText,
+            AnswerType = answerType,
+            IsRequired = isRequired,
+            ScaleMin = scaleMin,
+            ScaleMax = scaleMax,
             SortOrder = sortOrder,
         };
 

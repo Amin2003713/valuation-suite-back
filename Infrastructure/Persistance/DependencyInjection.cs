@@ -121,6 +121,14 @@ public static class DependencyInjection
         services.AddScoped<IQueryRepository<Payment>, Repositories.Common.QueryRepository<Payment>>();
         services.AddScoped<ICommandRepository<Domain.Tools.ToolSubmission>, Repositories.Common.CommandRepository<Domain.Tools.ToolSubmission>>();
         services.AddScoped<IQueryRepository<Domain.Tools.ToolSubmission>, Repositories.Common.QueryRepository<Domain.Tools.ToolSubmission>>();
+        // Per-tool submissions (one table per tool): typed write path + UNION read model.
+        services.AddScoped<Application.Interfaces.IToolSubmissionStore, Repositories.ToolSubmissionStore>();
+        services.AddScoped<Application.Interfaces.IToolSubmissionQueries, Repositories.ToolSubmissionQueries>();
+        // Per-tool questions + localizations (one table pair per tool): UNION read models
+        // and the tracked store used by the admin content endpoints.
+        services.AddScoped<Application.Interfaces.IToolQuestionQueries, Repositories.ToolQuestionQueries>();
+        services.AddScoped<Application.Interfaces.IToolContentQueries, Repositories.ToolContentQueries>();
+        services.AddScoped<Application.Interfaces.IToolQuestionStore, Repositories.ToolQuestionStore>();
         services.AddScoped<ICommandRepository<Domain.Tools.ToolForm>, Repositories.Common.CommandRepository<Domain.Tools.ToolForm>>();
         services.AddScoped<IQueryRepository<Domain.Tools.ToolForm>, Repositories.Common.QueryRepository<Domain.Tools.ToolForm>>();
         services.AddScoped<Application.Interfaces.IAdminQueryRepository, Repositories.Admin.AdminQueryRepository>();

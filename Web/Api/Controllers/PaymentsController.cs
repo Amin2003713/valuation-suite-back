@@ -24,7 +24,7 @@ public class PaymentsController(
     IQueryRepository<Payment> paymentQueries,
     IQueryRepository<ToolForm> toolForms,
     IQueryRepository<AccessPackage> packages,
-    IQueryRepository<ToolSubmission> submissions,
+    IToolSubmissionQueries submissions,
     IEntitlementService entitlements) : ControllerBase
 {
     private readonly ZarinpalOptions _options = zarinpalOptions.Value;
@@ -145,7 +145,7 @@ public class PaymentsController(
 
             case "advice":
             {
-                var sub = await submissions.TableNoTracking
+                var sub = await submissions.All
                     .FirstOrDefaultAsync(s => s.Id == request.SubmissionId, ct)
                     ?? throw new NotFoundException("ارزیابی یافت نشد");
                 if (sub.UserId != userId)

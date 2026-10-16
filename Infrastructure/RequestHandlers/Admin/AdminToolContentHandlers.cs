@@ -19,7 +19,7 @@ public static class AdminToolContentHandlers
     // ─── GET /api/admin/tools/{code}/questions ──────────────────────────
 
     public sealed class GetAdminToolQuestionsQueryHandler(
-        IQueryRepository<ToolQuestion> questions,
+        Application.Interfaces.IToolQuestionQueries questions,
         IQueryRepository<ToolForm> tools)
         : IRequestHandler<GetAdminToolQuestionsQuery, List<AdminQuestionRow>>
     {
@@ -27,22 +27,21 @@ public static class AdminToolContentHandlers
         {
             await EnsureToolExistsAsync(request.ToolCode, tools, ct);
 
-            var rows = await questions.TableNoTracking
-                .Where(q => q.ToolCode == request.ToolCode)
+            var rows = await questions.ByTool(request.ToolCode)
                 .OrderBy(q => q.SortOrder)
                 .ToListAsync(ct);
 
             return rows.Select(q => new AdminQuestionRow(
                 q.QuestionId, q.SectionKey, q.SectionTitle, q.Text,
-                q.Options().Select(o => new QuestionOptionRow(o.Value, o.Label)).ToList())).ToList();
+                Application.Tools.QuestionOptions.Parse(q.OptionsJson)
+                    .Select(o => new QuestionOptionRow(o.Value, o.Label)).ToList())).ToList();
         }
     }
 
     // ─── PUT /api/admin/tools/{code}/questions/{questionId} ─────────────
 
     public sealed class UpdateAdminToolQuestionCommandHandler(
-        ICommandRepository<ToolQuestion> questions,
-        IQueryRepository<ToolQuestion> questionQueries,
+        Application.Interfaces.IToolQuestionStore questions,
         IQueryRepository<ToolForm> tools)
         : IRequestHandler<UpdateAdminToolQuestionCommand, AdminQuestionRow>
     {
@@ -50,8 +49,7 @@ public static class AdminToolContentHandlers
         {
             await EnsureToolExistsAsync(request.ToolCode, tools, ct);
 
-            var entity = await questions.Table
-                .FirstOrDefaultAsync(q => q.ToolCode == request.ToolCode && q.QuestionId == request.QuestionId, ct)
+            var entity = await questions.FindAsync(request.ToolCode, request.QuestionId, ct)
                 ?? throw ValuationException.NotFound("سوال یافت نشد.");
 
             if (request.Text is { } text)
@@ -65,6 +63,7 @@ public static class AdminToolContentHandlers
                 entity.UpdateOptions(options.Select(o => (o.Value, o.Label)));
 
             await questions.SaveChangesAsync(ct);
+
 
             return new AdminQuestionRow(
                 entity.QuestionId, entity.SectionKey, entity.SectionTitle, entity.Text,
@@ -129,7 +128,7 @@ public static class AdminToolContentHandlers
 
     public sealed class GetAdminCompanyMembersQueryHandler(
         IQueryRepository<Domain.Users.ApplicationUser> users,
-        IQueryRepository<ToolSubmission> submissions,
+        Application.Interfaces.IToolSubmissionQueries submissions,
         IQueryRepository<Payment> payments)
         : IRequestHandler<GetAdminCompanyMembersQuery, List<AdminCompanyMemberRow>>
     {
@@ -148,7 +147,7 @@ public static class AdminToolContentHandlers
 
             var ids = members.Select(m => m.Id).ToList();
 
-            var subsByUser = await submissions.TableNoTracking
+            var subsByUser = await submissions.All
                 .Where(s => ids.Contains(s.UserId))
                 .GroupBy(s => s.UserId)
                 .Select(g => new { UserId = g.Key, Count = g.LongCount() })

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Domain.Tools;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -10,6 +11,9 @@ public interface IToolFormsDbContext
 {
     DbSet<TEntity> Set<TEntity>() where TEntity : class;
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Adds a runtime-typed entity (per-tool question/localization/submission rows).</summary>
+    void AddEntity(object entity);
 }
 
 /// <summary>
@@ -21,14 +25,10 @@ public static class ToolFormsSeeder
 {
     public static async Task SeedAsync(IToolFormsDbContext db, ILogger logger, CancellationToken ct = default)
     {
-        var existing = await db.Set<ToolForm>().Select(t => t.ToolCode).ToListAsync(ct);
+        var existingRows = await db.Set<ToolForm>().ToListAsync(ct);
+        var existing = existingRows.Select(t => t.ToolCode).ToList();
 
         var forms = Definitions().Where(d => !existing.Contains(d.Code)).ToList();
-        if (forms.Count == 0)
-        {
-            logger.LogInformation("Tool forms seed already present, skipping");
-            return;
-        }
 
         foreach (var d in forms)
         {
@@ -37,9 +37,76 @@ public static class ToolFormsSeeder
                 advancedPriceToman: advanced, route: route, advicePriceToman: advice));
         }
 
+        /* Tool-level localization rows: one (language, "") row per tool in its own
+         * <Tool>Localizations table, carrying the non-default language title/description
+         * (fa lives in the ToolForm base columns). Idempotent — an existing row is
+         * never overwritten (admins edit via the content API). */
+        var allTools = existingRows.Select(t => t.ToolCode).Concat(forms.Select(f => f.Code)).Distinct();
+        var filled = 0;
+        foreach (var code in allTools)
+        {
+            if (!English.TryGetValue(code, out var en)) continue;
+            if (!ToolRegistry.TryGetLocalization(code, out var locType)) continue;
+
+            var rows = SetOf(db, locType).Cast<ToolLocalizationBase>();
+            if (rows.Any(l => l.Language == "en" && l.QuestionId == ToolLocalizationBase.ToolLevelQuestionId))
+                continue;
+
+            var row = ToolRegistry.CreateLocalization(code, "en", ToolLocalizationBase.ToolLevelQuestionId);
+            row.Title = en.Title;
+            row.Description = en.Description;
+            db.AddEntity(row);
+            filled++;
+        }
+
+        if (forms.Count == 0 && filled == 0)
+        {
+            logger.LogInformation("Tool forms seed already present, skipping");
+            return;
+        }
+
         await db.SaveChangesAsync(ct);
-        logger.LogInformation("Seeded {Count} tool form definitions", forms.Count);
+        logger.LogInformation("Seeded {New} tool form definitions, {Filled} tool-info localization rows", forms.Count, filled);
     }
+
+    /// <summary>Runtime-typed DbSet for a per-tool entity (seeders).</summary>
+    private static IQueryable SetOf(IToolFormsDbContext db, Type type) =>
+        (IQueryable)typeof(IToolFormsDbContext)
+            .GetMethod(nameof(IToolFormsDbContext.Set))!
+            .MakeGenericMethod(type)
+            .Invoke(db, null)!;
+
+    /// <summary>
+    ///     English (non-default language) title/description per tool code. The fa
+    ///     originals live in <see cref="Definitions"/> (base columns); this map is
+    ///     the seed translation corpus — admins can edit any of it later at runtime.
+    /// </summary>
+    public static readonly Dictionary<string, (string Title, string? Description)> English = new()
+    {
+        ["IDEA-ASSESS"] = ("Idea Assessment", "Business idea potential assessment in 5 sections"),
+        ["INNOV-READ"] = ("KTH Innovation Readiness", "Innovation readiness assessment across 9 dimensions"),
+        ["IP-AUDIT"] = ("IP Audit", "Register your IP assets and compute their risk"),
+        ["JOB-EVAL"] = ("Job Values Assessment", "Discover your core work values and the right job"),
+        ["WIPO-DIAG"] = ("WIPO Diagnostics", "Intellectual property health check (WIPO)"),
+        ["IPSCORE"] = ("IPscore — Patent Assessment", "Patent portfolio assessment (5 question groups + NPV)"),
+        ["PATENT-SEARCH"] = ("Patent Search", "Advanced patent search (Lens.org) + expert review"),
+        ["STARTUP-VAL"] = ("Startup Valuation", "9 valuation methods with stage weights"),
+        ["BRAND-VAL"] = ("Brand Valuation", "RFR + Premium Profit + ICF + scenarios + Monte Carlo"),
+        ["TRADEMARK-VAL"] = ("Trademark Valuation", "7 methods + Monte Carlo + weighted reconciliation"),
+        ["PATENT-VAL"] = ("Patent Valuation (General)", "DCF + RFR + Black-Scholes + binomial + Monte Carlo"),
+        ["PHARMA-IP"] = ("Pharma Patent Valuation", "The general patent engine with pharma defaults"),
+        ["INTANGIBLE"] = ("Intangible Assets", "R&D + human capital + data assets + Monte Carlo"),
+        ["KNOWHOW"] = ("Know-How Valuation", "Reproduction/replacement + RFR + market + scorecard"),
+        ["ICON-SCORECARD"] = ("Trademark Valuation (Icon Scorecard)", "RFR + Premium + market + control scorecard + Monte Carlo range"),
+        ["BINOMIAL"] = ("Research Real-Option (Binomial)", "Cox–Ross–Rubinstein binomial tree with American exercise"),
+        ["SOFT-VAL"] = ("Software Valuation Framework", "6 valuation methods + WACC + Tornado + Monte Carlo"),
+        ["RNPV"] = ("Risk-Adjusted NPV (rNPV)", "5 clinical stages + milestones + royalty rates and sales thresholds"),
+        ["PVI"] = ("Patent Value Index (PVI)", "Patent quality score: 3 groups / 15 parameters / 37 indicators"),
+        ["KNOWHOW-PRO"] = ("Know-How Valuation (Advanced)", "Reproduction/replacement + DCF + RFR + revenue surplus + market + weighted blend"),
+        ["EXPORT-READ"] = ("Export Readiness", "11 domains / 66 questions with weights and improvement priorities"),
+        ["DIGITAL-AI"] = ("Digital Maturity & AI Readiness", "24 general questions + 24 specialist indicators with red/amber alerts"),
+        ["MATURITY"] = ("Organisation Maturity Assessment", "10 domains / 60 indicators with evidence weighting and critical gates"),
+    };
 
     /// <summary>
     ///     Default monetization per tool (Toman): basics free everywhere; advanced

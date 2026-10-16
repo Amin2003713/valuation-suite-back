@@ -20,7 +20,7 @@ namespace RequestHandlers.Tools;
 ///     toward Overall but never toward an Area bucket.
 /// </summary>
 public sealed class GetToolBenchmarkQueryHandler(
-    IQueryRepository<ToolSubmission> submissions,
+    IToolSubmissionQueries submissions,
     IQueryRepository<Domain.Users.ApplicationUser> usersQueries)
     : IRequestHandler<GetToolBenchmarkQuery, ToolBenchmarkResponse>
 {
@@ -32,9 +32,8 @@ public sealed class GetToolBenchmarkQueryHandler(
 
         // Own submissions are excluded from the aggregate (the chart shows the
         // user's result as its own series — averaging it in would bias both).
-        var rows = await submissions.TableNoTracking
-            .Where(s => s.ToolCode == request.ToolCode
-                        && s.OverallScore != null
+        var rows = await submissions.ByTool(request.ToolCode)
+            .Where(s => s.OverallScore != null
                         && s.UserId != request.UserId)
             .ToListAsync(ct);
 

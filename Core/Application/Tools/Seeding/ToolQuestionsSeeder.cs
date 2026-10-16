@@ -16,28 +16,259 @@ public static class ToolQuestionsSeeder
 {
     public static async Task SeedAsync(IToolFormsDbContext db, ILogger logger, CancellationToken ct = default)
     {
-        var existingPairs = await db.Set<ToolQuestion>()
-            .Select(q => new { q.ToolCode, q.QuestionId })
-            .ToListAsync(ct);
-        var existing = existingPairs.Select(p => $"{p.ToolCode}|{p.QuestionId}").ToHashSet();
-
         var defs = Definitions();
-        var missing = defs.Where(d => !existing.Contains($"{d.ToolCode}|{d.Id}")).ToList();
-        if (missing.Count == 0)
+
+        /* Existing per-tool question rows + localization rows (only the tools that
+         * actually have question content are inspected — keeps startup cheap). */
+        var toolsInDefs = defs.Select(d => d.ToolCode).Distinct().ToList();
+        var existingQuestion = new HashSet<string>();
+        var existingLoc = new HashSet<string>();
+        var existingRowsByTool = new Dictionary<string, List<ToolQuestionBase>>();
+        foreach (var code in toolsInDefs)
+        {
+            if (!ToolRegistry.TryGetQuestion(code, out var qType)) continue;
+            var rows = SetOf(db, qType).Cast<ToolQuestionBase>().ToList();
+            existingRowsByTool[code] = rows;
+            foreach (var q in rows) existingQuestion.Add($"{code}|{q.QuestionId}");
+
+            if (!ToolRegistry.TryGetLocalization(code, out var lType)) continue;
+            foreach (var l in SetOf(db, lType).Cast<ToolLocalizationBase>())
+                existingLoc.Add($"{code}|{l.Language}|{l.QuestionId}");
+        }
+
+        var missing = defs.Where(d => !existingQuestion.Contains($"{d.ToolCode}|{d.Id}")).ToList();
+
+        foreach (var d in missing)
+        {
+            var meta = Meta.GetValueOrDefault(d.ToolCode);
+            var row = ToolRegistry.CreateQuestion(d.ToolCode);
+            row.QuestionId = d.Id;
+            row.SectionKey = d.SectionKey;
+            row.SectionTitle = d.SectionTitle;
+            row.Text = d.Text;
+            row.OptionsJson = d.OptionsJson;
+            row.SortOrder = d.Sort;
+            row.AnswerType = meta.AnswerType;
+            row.IsRequired = meta.Required;
+            row.ScaleMin = meta.Min;
+            row.ScaleMax = meta.Max;
+            db.AddEntity(row);
+            existingQuestion.Add($"{d.ToolCode}|{d.Id}");
+        }
+
+        /* Validation metadata for rows copied from the legacy shared table (they arrive
+         * with the empty default AnswerType). Applied only while the row is untouched —
+         * never overwrites an admin or seed edit. */
+        var filledMeta = 0;
+        foreach (var rows in existingRowsByTool.Values)
+        foreach (var row in rows)
+        {
+            var meta = Meta.GetValueOrDefault(row.ToolCode);
+            if (meta.AnswerType != "text" && string.IsNullOrEmpty(row.AnswerType))
+            {
+                row.AnswerType = meta.AnswerType;
+                row.IsRequired = meta.Required;
+                row.ScaleMin = meta.Min;
+                row.ScaleMax = meta.Max;
+                filledMeta++;
+            }
+        }
+
+        /* English localization rows for every question the corpus knows and that has
+         * no en row yet — covers both freshly seeded and legacy rows. */
+        var filledTranslations = 0;
+        foreach (var d in defs)
+        {
+            if (!English.TryGetValue((d.ToolCode, d.Id), out var en) || en.Text is null) continue;
+            if (existingLoc.Contains($"{d.ToolCode}|en|{d.Id}")) continue;
+
+            var row = ToolRegistry.CreateLocalization(d.ToolCode, "en", d.Id);
+            row.Text = en.Text;
+            row.SectionTitle = en.SectionTitle;
+            if (en.Options is { Count: > 0 })
+                row.OptionsJson = System.Text.Json.JsonSerializer.Serialize(
+                    en.Options.Select(kv => new { value = kv.Key, label = kv.Value }).ToArray());
+            db.AddEntity(row);
+            existingLoc.Add($"{d.ToolCode}|en|{d.Id}");
+            filledTranslations++;
+        }
+
+        if (missing.Count == 0 && filledTranslations == 0 && filledMeta == 0)
         {
             logger.LogInformation("Tool questions seed already present, skipping");
             return;
         }
 
-        foreach (var d in missing)
-        {
-            db.Set<ToolQuestion>().Add(ToolQuestion.Create(
-                d.ToolCode, d.Id, d.SectionKey, d.SectionTitle, d.Text, d.OptionsJson, d.Sort));
-        }
-
         await db.SaveChangesAsync(ct);
-        logger.LogInformation("Seeded {Count} tool question rows", missing.Count);
+        logger.LogInformation(
+            "Seeded {Count} tool question rows; filled {Translations} en localization rows and {Meta} validation-metadata rows",
+            missing.Count, filledTranslations, filledMeta);
     }
+
+    /// <summary>Runtime-typed DbSet for a per-tool entity (seeders).</summary>
+    private static IQueryable SetOf(IToolFormsDbContext db, Type type) =>
+        (IQueryable)typeof(IToolFormsDbContext)
+            .GetMethod(nameof(IToolFormsDbContext.Set))!
+            .MakeGenericMethod(type)
+            .Invoke(db, null)!;
+
+    /// <summary>
+    ///     Validation metadata per tool (answer type, required, scale bounds) — drives
+    ///     the server-side answer validator. "taglist" (JOB-EVAL) is intentionally
+    ///     unvalidated: the client posts tag strings, not the seeded option values.
+    /// </summary>
+    private static readonly Dictionary<string, (string AnswerType, bool Required, int? Min, int? Max)> Meta = new()
+    {
+        ["IDEA-ASSESS"] = ("scale", true, 1, 5),     // client blocks incomplete runs
+        ["INNOV-READ"] = ("scale", true, 0, 10),     // sliders always submit all 9
+        ["IPSCORE"] = ("scale", false, 1, 5),        // client allows partial questionnaires
+        ["WIPO-DIAG"] = ("choice", false, null, null), // yes/no/not-sure; partial runs allowed
+        ["JOB-EVAL"] = ("taglist", false, null, null), // arrays of tags, not option values
+    };
+
+    // ─── English (non-default language) seed corpus ───────────────────
+
+    private static readonly Dictionary<string, string> YesNoNotSure = new() { ["0"] = "Yes", ["1"] = "No", ["2"] = "Not sure" };
+    private static readonly Dictionary<string, string> YesNo = new() { ["0"] = "Yes", ["1"] = "No" };
+
+    private static readonly Dictionary<string, string> JobValueLabels = new()
+    {
+        ["0"] = "1 Freedom", ["1"] = "2 Security", ["2"] = "3 Achievement", ["3"] = "4 Pleasure",
+        ["4"] = "5 Creativity", ["5"] = "6 Empathy", ["6"] = "7 Respect", ["7"] = "8 Power",
+        ["8"] = "9 Belonging", ["9"] = "10 Spirituality", ["10"] = "11 Courage", ["11"] = "12 Knowledge",
+        ["12"] = "13 Beauty", ["13"] = "14 Justice", ["14"] = "15 Health", ["15"] = "16 Honesty",
+    };
+
+    /// <summary>English question texts / section titles / option labels per (tool, question id).</summary>
+    private static readonly Dictionary<(string Tool, string Id), (string Text, string? SectionTitle, Dictionary<string, string>? Options)> English = new()
+    {
+        // ── IDEA-ASSESS ──
+        [("IDEA-ASSESS", "innovation_q1")] = ("How differentiated is your idea compared to competitors?", "Innovation", null),
+        [("IDEA-ASSESS", "innovation_q2")] = ("How much does your idea's solution improve the problem?", "Innovation", null),
+        [("IDEA-ASSESS", "innovation_q3")] = ("How much does your idea use new technologies?", "Innovation", null),
+        [("IDEA-ASSESS", "innovation_q4")] = ("How much potential does your idea have to create a new market?", "Innovation", null),
+        [("IDEA-ASSESS", "innovation_q5")] = ("How easily can your idea be copied by competitors?", "Innovation", null),
+        [("IDEA-ASSESS", "team_q1")] = ("How much relevant industry experience does your team have?", "Team", null),
+        [("IDEA-ASSESS", "team_q2")] = ("How strong is your team's technical capability?", "Team", null),
+        [("IDEA-ASSESS", "team_q3")] = ("How strong is your team's cohesion?", "Team", null),
+        [("IDEA-ASSESS", "team_q4")] = ("How much access does your team have to advisors and experts?", "Team", null),
+        [("IDEA-ASSESS", "team_q5")] = ("How committed is your team to the project's success?", "Team", null),
+        [("IDEA-ASSESS", "team_q6")] = ("How diverse is the mix of expertise in your team?", "Team", null),
+        [("IDEA-ASSESS", "technology_q1")] = ("How technically complex is your idea?", "Technology", null),
+        [("IDEA-ASSESS", "technology_q2")] = ("How high are the technical barriers to implementing the idea?", "Technology", null),
+        [("IDEA-ASSESS", "technology_q3")] = ("How sustainable is the technology in the long run?", "Technology", null),
+        [("IDEA-ASSESS", "technology_q4")] = ("How scalable is the technology?", "Technology", null),
+        [("IDEA-ASSESS", "technology_q5")] = ("How costly is the technology development?", "Technology", null),
+        [("IDEA-ASSESS", "technology_q6")] = ("How secure and reliable is the technology?", "Technology", null),
+        [("IDEA-ASSESS", "market_q1")] = ("How large is your target market?", "Market", null),
+        [("IDEA-ASSESS", "market_q2")] = ("How fast is your target market growing?", "Market", null),
+        [("IDEA-ASSESS", "market_q3")] = ("How intense is the customer's need for your solution?", "Market", null),
+        [("IDEA-ASSESS", "market_q4")] = ("How strong is customers' ability to pay?", "Market", null),
+        [("IDEA-ASSESS", "market_q5")] = ("How repeatable are customer purchases?", "Market", null),
+        [("IDEA-ASSESS", "financial_q1")] = ("How profitable is your idea?", "Financial", null),
+        [("IDEA-ASSESS", "financial_q2")] = ("How high is the return on investment (ROI)?", "Financial", null),
+        [("IDEA-ASSESS", "financial_q3")] = ("How high is the project's financial risk?", "Financial", null),
+        [("IDEA-ASSESS", "financial_q4")] = ("How high are the fixed and variable costs?", "Financial", null),
+        [("IDEA-ASSESS", "financial_q5")] = ("How strong is the long-term profit potential?", "Financial", null),
+
+        // ── INNOV-READ ──
+        [("INNOV-READ", "crl")] = ("Customer readiness — current level (0 to 10)", "Customer readiness (CRL)", null),
+        [("INNOV-READ", "trl")] = ("Technology readiness — current level (0 to 10)", "Technology readiness (TRL)", null),
+        [("INNOV-READ", "brl")] = ("Business readiness — current level (0 to 10)", "Business readiness (BRL)", null),
+        [("INNOV-READ", "iprl")] = ("IP readiness — current level (0 to 10)", "IP readiness (IPRL)", null),
+        [("INNOV-READ", "tmrl")] = ("Team readiness — current level (0 to 10)", "Team readiness (TmRL)", null),
+        [("INNOV-READ", "frl")] = ("Finance readiness — current level (0 to 10)", "Finance readiness (FRL)", null),
+        [("INNOV-READ", "lrl")] = ("Legal readiness — current level (0 to 10)", "Legal readiness (LRL)", null),
+        [("INNOV-READ", "scrl")] = ("Social readiness — current level (0 to 10)", "Social readiness (SCRL)", null),
+        [("INNOV-READ", "srl")] = ("Sustainability readiness — current level (0 to 10)", "Sustainability readiness (SRL)", null),
+
+        // ── WIPO-DIAG ──
+        [("WIPO-DIAG", "tmRegistered")] = ("Have you registered a trademark with a national or regional IP office, or filed an application for one?", "Trademarks", YesNo),
+        [("WIPO-DIAG", "tmUsage")] = ("Do you use your registered trademark to market your goods and services?", "Trademarks", YesNoNotSure),
+        [("WIPO-DIAG", "tmInvestors")] = ("Are you interested in attracting investors to your company?", "Trademarks", YesNoNotSure),
+        [("WIPO-DIAG", "tmLicense")] = ("Have you considered licensing your trademark to another party?", "Trademarks", YesNo),
+        [("WIPO-DIAG", "tmLicenseObtain")] = ("Have you considered obtaining a license to use someone else's trademark in your business?", "Trademarks", YesNo),
+        [("WIPO-DIAG", "tmInfringement")] = ("Do you believe others are using similar or identical marks for similar goods or services without your permission?", "Trademarks", YesNo),
+        [("WIPO-DIAG", "tmExternal")] = ("Was your trademark designed for you by an outside party?", "Trademarks", YesNo),
+        [("WIPO-DIAG", "confidentialProtection")] = ("Have you taken reasonable steps to protect business information you consider valuable?", "Confidential information", YesNoNotSure),
+        [("WIPO-DIAG", "confidentialAccess")] = ("Is access to this information controlled (passwords, document shredding, confidential marking, etc.)?", "Confidential information", YesNo),
+        [("WIPO-DIAG", "confidentialNDA")] = ("Are outside parties asked to sign non-disclosure agreements?", "Confidential information", YesNo),
+        [("WIPO-DIAG", "confidentialSystems")] = ("Are systems in place to determine who can access confidential information?", "Confidential information", YesNoNotSure),
+        [("WIPO-DIAG", "confidentialProduct")] = ("Is confidential information embodied in the products you produce?", "Confidential information", YesNoNotSure),
+        [("WIPO-DIAG", "designRegistered")] = ("Have you registered an industrial design with an IP office, or filed an application for one?", "Industrial designs", YesNo),
+        [("WIPO-DIAG", "designInvestors")] = ("Are you interested in attracting investors to your company?", "Industrial designs", YesNoNotSure),
+        [("WIPO-DIAG", "designLicense")] = ("Have you considered licensing your design to another company?", "Industrial designs", YesNo),
+        [("WIPO-DIAG", "designLicenseObtain")] = ("Have you considered obtaining a license to use another company's design?", "Industrial designs", YesNo),
+        [("WIPO-DIAG", "designInfringement")] = ("Do you believe others are using your designs on their products without your permission?", "Industrial designs", YesNo),
+        [("WIPO-DIAG", "designExternal")] = ("Was the design you use developed for you by an outside party?", "Industrial designs", YesNo),
+        [("WIPO-DIAG", "patentGranted")] = ("Have you obtained a patent for your invention, or filed an application with a national, regional or international office?", "Inventions & innovation", YesNo),
+        [("WIPO-DIAG", "patentDatabases")] = ("Are you aware of free patent databases?", "Inventions & innovation", YesNo),
+        [("WIPO-DIAG", "inventiveInvestors")] = ("Are you interested in attracting investors to your company?", "Inventions & innovation", YesNoNotSure),
+        [("WIPO-DIAG", "inventiveLicense")] = ("Have you considered licensing out your technology?", "Inventions & innovation", YesNo),
+        [("WIPO-DIAG", "inventiveLicenseObtain")] = ("Have you considered licensing in someone else's technology?", "Inventions & innovation", YesNo),
+        [("WIPO-DIAG", "inventiveInfringement")] = ("Do you believe others are using your technology without your consent?", "Inventions & innovation", YesNo),
+        [("WIPO-DIAG", "inventiveExternal")] = ("Was your new technology developed for you by an outside party?", "Inventions & innovation", YesNo),
+        [("WIPO-DIAG", "employeeInventions")] = ("Do your employees play a role in inventing new products or processes?", "Employees", YesNo),
+        [("WIPO-DIAG", "employeeDesigns")] = ("Do your employees contribute to developing creative materials, designs or trademarks?", "Employees", YesNo),
+        [("WIPO-DIAG", "employeeConfidential")] = ("Do your employment agreements include provisions for protecting confidential information?", "Employees", YesNo),
+        [("WIPO-DIAG", "employeeTraining")] = ("Do you train your employees on protecting confidential information?", "Employees", YesNo),
+        [("WIPO-DIAG", "employeeHiring")] = ("When hiring, do you make sure candidates do not bring a previous employer's trade secrets?", "Employees", YesNo),
+        [("WIPO-DIAG", "domainRegistered")] = ("Have you registered a domain name for your website?", "Website", YesNo),
+        [("WIPO-DIAG", "domainTrademark")] = ("Is your domain name your trademark?", "Website", YesNo),
+        [("WIPO-DIAG", "domainTrademarkOther")] = ("Is your domain name a trademark registered by someone else?", "Website", YesNo),
+        [("WIPO-DIAG", "websiteDevelopment")] = ("Did you develop your website independently?", "Website", YesNo),
+        [("WIPO-DIAG", "websiteMaterials")] = ("Were the materials uploaded to the website developed by your company?", "Website", YesNo),
+        [("WIPO-DIAG", "websiteLinks")] = ("Does your website contain links to materials on other websites?", "Website", YesNo),
+        [("WIPO-DIAG", "websiteUsers")] = ("Do users upload materials to your website?", "Website", YesNo),
+
+        // ── IPSCORE ──
+        [("IPSCORE", "A1")] = ("What is the registration status of the patent?", "A — Legal status", null),
+        [("IPSCORE", "A2")] = ("How sound is the patent's position and legal strength?", "A — Legal status", null),
+        [("IPSCORE", "A3")] = ("How much longer does the patent remain in force?", "A — Legal status", null),
+        [("IPSCORE", "A4")] = ("How broad and comprehensive are the patent claims?", "A — Legal status", null),
+        [("IPSCORE", "A5")] = ("Does the patent's geographic coverage include your target markets?", "A — Legal status", null),
+        [("IPSCORE", "A6")] = ("Is regular monitoring performed to identify patent infringement?", "A — Legal status", null),
+        [("IPSCORE", "A7")] = ("Are patent lawsuits common in the relevant market?", "A — Legal status", null),
+        [("IPSCORE", "A8")] = ("Does the company have the ability to pursue and enforce its patent rights?", "A — Legal status", null),
+        [("IPSCORE", "B1")] = ("Is the invention a unique technology?", "B — Technology", null),
+        [("IPSCORE", "B2")] = ("Is the invention technically superior to alternative technologies?", "B — Technology", null),
+        [("IPSCORE", "B3")] = ("To what extent has the invention been tested and trialled?", "B — Technology", null),
+        [("IPSCORE", "B4")] = ("Does the technology require new skills or equipment?", "B — Technology", null),
+        [("IPSCORE", "B5")] = ("How long is needed before full commercialisation?", "B — Technology", null),
+        [("IPSCORE", "B6")] = ("Is it easy to produce copycat products of the invention?", "B — Technology", null),
+        [("IPSCORE", "B7")] = ("Is it easy to identify products that infringe the patent?", "B — Technology", null),
+        [("IPSCORE", "B8")] = ("Does implementing the technology depend on others' licenses?", "B — Technology", null),
+        [("IPSCORE", "B9")] = ("Does the technology have market value (value for the customer)?", "B — Technology", null),
+        [("IPSCORE", "C1")] = ("What are the marketing options and methods?", "C — Market", null),
+        [("IPSCORE", "C2")] = ("What is the growth rate of the market for this technology's use?", "C — Market", null),
+        [("IPSCORE", "C3")] = ("What is the technology's expected useful life in the market?", "C — Market", null),
+        [("IPSCORE", "C4")] = ("Are competing or substitute products active in the market?", "C — Market", null),
+        [("IPSCORE", "C5")] = ("How does the final price paid by customers compare to existing products?", "C — Market", null),
+        [("IPSCORE", "C6")] = ("What is the additional turnover potential from applying the technology?", "C — Market", null),
+        [("IPSCORE", "C7")] = ("How well does the company understand the application potential and commercial opportunities?", "C — Market", null),
+        [("IPSCORE", "C8")] = ("Does the patent have licensing revenue potential?", "C — Market", null),
+        [("IPSCORE", "C9")] = ("Do the commercial activities require special permits?", "C — Market", null),
+        [("IPSCORE", "D1")] = ("Can the market's current output be maintained without the patented technology?", "D — Financial", null),
+        [("IPSCORE", "D2")] = ("How high are the required future development costs?", "D — Financial", null),
+        [("IPSCORE", "D3")] = ("What is the production cost index when the patented technology is used?", "D — Financial", null),
+        [("IPSCORE", "D4")] = ("How much investment is required for production equipment?", "D — Financial", null),
+        [("IPSCORE", "D5")] = ("Can the company afford the patent renewal fees?", "D — Financial", null),
+        [("IPSCORE", "D6")] = ("How much of the company's profit comes from the patented technology?", "D — Financial", null),
+        [("IPSCORE", "E1")] = ("Is the patent's purpose to consolidate a position in existing markets?", "E — Strategy", null),
+        [("IPSCORE", "E2")] = ("Is the patent's purpose to open new markets?", "E — Strategy", null),
+        [("IPSCORE", "E3")] = ("Is the patent part of a credibility and branding process?", "E — Strategy", null),
+        [("IPSCORE", "E4")] = ("Is the patent's purpose to secure freedom to operate?", "E — Strategy", null),
+        [("IPSCORE", "E5")] = ("Is the patent's purpose to hinder competitors' development?", "E — Strategy", null),
+        [("IPSCORE", "E6")] = ("Does the company use the patent in licensing or sales agreements?", "E — Strategy", null),
+        [("IPSCORE", "E7")] = ("Is the patent part of the company's key, core technologies?", "E — Strategy", null),
+        [("IPSCORE", "E8")] = ("Is there full alignment between the patent and the business strategy?", "E — Strategy", null),
+
+        // ── JOB-EVAL (pick-lists; the client posts tags, options are display-only) ──
+        [("JOB-EVAL", "alwaysValues")] = ("Vital values (driving forces) — choose up to 5", "16 core values", JobValueLabels),
+        [("JOB-EVAL", "neverValues")] = ("Least important values — choose up to 5", "16 core values", JobValueLabels),
+    };
+
+    // ─── Content mirrors the client data files (fa) ─────────────────────
 
     private static (string ToolCode, string Id, string SectionKey, string SectionTitle, string Text, string OptionsJson, int Sort) Def(
         string tool, string id, string section, string title, string text, int sort, string[]? options = null)
@@ -46,8 +277,6 @@ public static class ToolQuestionsSeeder
     private static string Options(string[] labels) =>
         System.Text.Json.JsonSerializer.Serialize(
             labels.Select((l, i) => new { value = i, label = l }).ToArray());
-
-    // ─── Content mirrors the client data files (fa) ─────────────────────
 
     private static (string ToolCode, string Id, string SectionKey, string SectionTitle, string Text, string OptionsJson, int Sort)[] Definitions() =>
     [

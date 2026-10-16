@@ -37,9 +37,11 @@ public class SubmissionNoteConfiguration : IEntityTypeConfiguration<SubmissionNo
         builder.Property(n => n.AudioMimeType).HasMaxLength(100);
         builder.HasIndex(n => n.SubmissionId);
 
-        builder.HasOne<ToolSubmission>()
-            .WithMany()
-            .HasForeignKey(n => n.SubmissionId)
-            .OnDelete(DeleteBehavior.Cascade);
+        /* Submission FK intentionally removed with the move to per-tool submission
+         * tables (one table per tool): a submission id now lives in exactly one of
+         * the 23 tables, so a single FK to the legacy ToolSubmissions table can no
+         * longer cover it. The SubmissionId column + index stay; the relationship is
+         * logical only. The legacy table itself is kept (archive + old rows' FK target
+         * is dropped in the same migration). */
     }
 }

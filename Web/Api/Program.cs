@@ -90,6 +90,10 @@ public class Program
         builder.Services.Configure<Application.Tools.Options.BinomialOptions>(
             builder.Configuration.GetSection(Application.Tools.Options.BinomialOptions.SectionName));
 
+        // Supported languages (single config list; default + fallback = fa).
+        builder.Services.Configure<Application.Common.LanguageOptions>(
+            builder.Configuration.GetSection(Application.Common.LanguageOptions.SectionName));
+
         builder.Services.Configure<Application.Tools.Options.SvfOptions>(
             builder.Configuration.GetSection(Application.Tools.Options.SvfOptions.SectionName));
 
@@ -98,6 +102,10 @@ public class Program
 
         // Current-user accessor used by tool handlers (composition root wiring)
         builder.Services.AddScoped<Application.Interfaces.ICurrentUserAccessor, RequestHandlers.Tools.HttpCurrentUserAccessor>();
+
+        // Request language (?lang > Accept-Language > default fa) + tool content localization.
+        builder.Services.AddScoped<Application.Interfaces.ILanguageResolver, RequestHandlers.Tools.LanguageResolver>();
+        builder.Services.AddScoped<Application.Tools.IToolContentResolver, Application.Tools.ToolContentResolver>();
 
         // ---- JWT auth ----
         builder.Services.AddScoped<TokenService>();
@@ -144,6 +152,11 @@ public class Program
         app.UseHttpsRedirection();
         app.UseAuthentication();
         app.UseAuthorization();
+
+        // Resolves the request language once (query > header > default) and stamps
+        // Content-Language on every response; tool handlers read it via ILanguageResolver.
+        app.UseMiddleware<RequestHandlers.Tools.LanguageMiddleware>();
+
         app.UseWebApi();
 
         // Seed the IP assessment (moved from the frontend's hard-coded questions)

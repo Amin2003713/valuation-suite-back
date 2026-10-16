@@ -41,7 +41,6 @@ public sealed class EntitlementService(
     IQueryRepository<ApplicationUser> users,
     ICommandRepository<UserToolAccess> grantCommands,
     IQueryRepository<UserToolAccess> grants,
-    IQueryRepository<ToolSubmission> submissions,
     IQueryRepository<Payment> payments) : IEntitlementService
 {
     public async Task<bool> IsProAsync(Guid userId, CancellationToken ct = default)
