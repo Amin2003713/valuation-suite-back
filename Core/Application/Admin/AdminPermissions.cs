@@ -29,6 +29,8 @@ public static class Perms
     public const string NotesWrite = "notes.write";
     /// <summary>Grant/revoke tool access and manage packages.</summary>
     public const string AccessManage = "access.manage";
+    /// <summary>Manage site content: footer links and blog posts.</summary>
+    public const string ContentManage = "content.manage";
     /// <summary>Read the contact inbox + newsletter subscribers.</summary>
     public const string MessagingRead = "messaging.read";
     /// <summary>Triage contact messages / manage newsletter subscribers.</summary>
@@ -37,7 +39,7 @@ public static class Perms
     public static readonly string[] All =
     [
         DashboardView, CustomersRead, CustomersManage, PaymentsRead, SubmissionsRead,
-        NotesWrite, AccessManage, MessagingRead, MessagingManage
+        NotesWrite, AccessManage, ContentManage, MessagingRead, MessagingManage
     ];
 }
 
@@ -52,7 +54,7 @@ public static class RolePermissions
             Perms.DashboardView, Perms.CustomersRead, Perms.PaymentsRead, Perms.SubmissionsRead,
             Perms.MessagingRead, Perms.MessagingManage
         ],
-        [AdminRoles.Analyst] = [Perms.DashboardView, Perms.SubmissionsRead],
+        [AdminRoles.Analyst] = [Perms.DashboardView, Perms.SubmissionsRead, Perms.ContentManage],
         [AdminRoles.Adviser] = [Perms.SubmissionsRead, Perms.NotesWrite],
     };
 
