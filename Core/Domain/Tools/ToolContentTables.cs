@@ -152,6 +152,8 @@ public sealed class ExportReadinessQuestion : ToolQuestionBase;
 public sealed class DigitalAiReadinessQuestion : ToolQuestionBase;
 public sealed class MaturityAssessmentQuestion : ToolQuestionBase;
 
+public sealed class StartupAssessmentQuestion : ToolQuestionBase;
+
 public sealed class IdeaAssessmentLocalization : ToolLocalizationBase;
 public sealed class InnovationReadinessLocalization : ToolLocalizationBase;
 public sealed class IpAuditLocalization : ToolLocalizationBase;
@@ -175,3 +177,5 @@ public sealed class KnowhowProLocalization : ToolLocalizationBase;
 public sealed class ExportReadinessLocalization : ToolLocalizationBase;
 public sealed class DigitalAiReadinessLocalization : ToolLocalizationBase;
 public sealed class MaturityAssessmentLocalization : ToolLocalizationBase;
+
+public sealed class StartupAssessmentLocalization : ToolLocalizationBase;

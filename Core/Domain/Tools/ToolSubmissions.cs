@@ -30,6 +30,8 @@ public sealed class StartupValuationSubmission : ToolSubmissionBase;
 
 public sealed class BrandValuationSubmission : ToolSubmissionBase;
 
+public sealed class StartupAssessmentSubmission : ToolSubmissionBase;
+
 public sealed class TrademarkValuationSubmission : ToolSubmissionBase;
 
 public sealed class PatentValuationSubmission : ToolSubmissionBase;

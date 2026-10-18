@@ -106,6 +106,7 @@ public static class ToolFormsSeeder
         ["EXPORT-READ"] = ("Export Readiness", "11 domains / 66 questions with weights and improvement priorities"),
         ["DIGITAL-AI"] = ("Digital Maturity & AI Readiness", "24 general questions + 24 specialist indicators with red/amber alerts"),
         ["MATURITY"] = ("Organisation Maturity Assessment", "10 domains / 60 indicators with evidence weighting and critical gates"),
+        ["STARTUP-ASSESS"] = ("Startup Assessment", "Multi-criteria startup assessment: 10 axes / 60 criteria with stages, critical-risk flags and evidence quality"),
     };
 
     /// <summary>
@@ -143,6 +144,7 @@ public static class ToolFormsSeeder
             ["EXPORT-READ"] = (0, 150_000, "export-readiness"),
             ["DIGITAL-AI"] = (0, 150_000, "digital-ai-readiness"),
             ["MATURITY"] = (0, 150_000, "maturity-assessment"),
+            ["STARTUP-ASSESS"] = (0, 150_000, "startup-assessment"),
         };
 
         public static (long Advanced, long Advice, string Route) For(string code) =>
@@ -352,6 +354,16 @@ public static class ToolFormsSeeder
 
         ("MATURITY", "سنجش بلوغ و آمادگی سازمان", "۱۰ حوزه / ۶۰ شاخص با ضریب شواهد و گیت شروط حیاتی", ToolKind.Assessment,
             Json(new { domains = 10, questions = 60, evidenceOptions = new[] { "بدون مدرک", "مدرک محدود یا قدیمی", "مدرک معتبر و جاری" } }), 25),
+
+        ("STARTUP-ASSESS", "ارزیابی استارتاپ", "مدل ارزیابی چندمعیاره: ۱۰ محور، ۶۰ معیار با مرحله‌بندی، ریسک بحرانی و کیفیت شاهد", ToolKind.Assessment,
+            Json(new
+            {
+                axes = 10,
+                criteriaPerAxis = 6,
+                criteriaTotal = 60,
+                stageProfiles = new { idea = "پیش از محصول و مشتری", seed = "نمونه اولیه و پایلوت", growth = "فروش و مقیاس", manual = "وزن‌دهی دستی" },
+                scales = new { criteriaScore = new[] { 0, 5 }, evidenceQuality = new[] { 0, 3 }, resultThresholds = new[] { 80, 65, 50 } },
+            }), 26),
     ];
 
     private static object[] IdeaQuestions() =>

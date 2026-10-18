@@ -108,7 +108,21 @@ public sealed class GetToolBenchmarkQueryHandler(
 
             if (root.ValueKind == JsonValueKind.Object)
             {
-                if (root.TryGetProperty("sections", out var sections) && sections.ValueKind == JsonValueKind.Array)
+                if (root.TryGetProperty("rows", out var rows) && rows.ValueKind == JsonValueKind.Array)
+                {
+                    // STARTUP-ASSESS: one row per axis — the axis score "C" is 0–100.
+                    var i = 0;
+                    foreach (var r in rows.EnumerateArray())
+                    {
+                        if (r.ValueKind == JsonValueKind.Object)
+                        {
+                            var axisScore = ReadScore(r, prop: "C");
+                            if (axisScore is { } v) metrics[$"axis{i}"] = v;
+                        }
+                        i++;
+                    }
+                }
+                else if (root.TryGetProperty("sections", out var sections) && sections.ValueKind == JsonValueKind.Array)
                 {
                     foreach (var s in sections.EnumerateArray())
                     {
@@ -156,11 +170,11 @@ public sealed class GetToolBenchmarkQueryHandler(
     }
 
     /// <summary>Reads score/percent/value from a section object, clamped to 0..<paramref name="max"/>.</summary>
-    private static double? ReadScore(JsonElement el, double max = 100)
+    private static double? ReadScore(JsonElement el, double max = 100, string? prop = null)
     {
-        foreach (var prop in new[] { "percent", "score", "value" })
+        foreach (var p in prop is null ? new[] { "percent", "score", "value" } : new[] { prop })
         {
-            if (el.TryGetProperty(prop, out var v) && v.ValueKind == JsonValueKind.Number && v.TryGetDouble(out var d))
+            if (el.TryGetProperty(p, out var v) && v.ValueKind == JsonValueKind.Number && v.TryGetDouble(out var d))
             {
                 if (d < 0 || d > max) return null;
                 return d;

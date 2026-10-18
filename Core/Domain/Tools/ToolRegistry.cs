@@ -24,6 +24,7 @@ public static class ToolRegistry
             ["PATENT-SEARCH"] = new(typeof(PatentSearchSubmission), typeof(PatentSearchQuestion), typeof(PatentSearchLocalization)),
             ["STARTUP-VAL"] = new(typeof(StartupValuationSubmission), typeof(StartupValuationQuestion), typeof(StartupValuationLocalization)),
             ["BRAND-VAL"] = new(typeof(BrandValuationSubmission), typeof(BrandValuationQuestion), typeof(BrandValuationLocalization)),
+            ["STARTUP-ASSESS"] = new(typeof(StartupAssessmentSubmission), typeof(StartupAssessmentQuestion), typeof(StartupAssessmentLocalization)),
             ["TRADEMARK-VAL"] = new(typeof(TrademarkValuationSubmission), typeof(TrademarkValuationQuestion), typeof(TrademarkValuationLocalization)),
             ["PATENT-VAL"] = new(typeof(PatentValuationSubmission), typeof(PatentValuationQuestion), typeof(PatentValuationLocalization)),
             ["PHARMA-IP"] = new(typeof(PharmaPatentValuationSubmission), typeof(PharmaPatentValuationQuestion), typeof(PharmaPatentValuationLocalization)),
