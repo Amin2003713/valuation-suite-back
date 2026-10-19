@@ -150,8 +150,6 @@ public class Program
         }
 
         app.UseHttpsRedirection();
-        app.UseAuthentication();
-        app.UseAuthorization();
 
         // Resolves the request language once (query > header > default) and stamps
         // Content-Language on every response; tool handlers read it via ILanguageResolver.
