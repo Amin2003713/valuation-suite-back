@@ -40,10 +40,7 @@ public static class ToolRunnerRegistration
         services.AddSingleton<IToolRunner, PharmaPatentValuationRunner>(); // pharma-ip-valuation (same engine)
         services.AddSingleton<IntangibleAssetsRunner>();
         services.AddSingleton<IToolRunner, IntangibleAssetsRunner>(sp => sp.GetRequiredService<IntangibleAssetsRunner>());
-        services.AddSingleton<KnowhowValuationRunner>();
-        services.AddSingleton<IToolRunner, KnowhowValuationRunner>(sp => sp.GetRequiredService<KnowhowValuationRunner>());
         services.AddSingleton<IToolRunner, IconScorecardRunner>();
-        services.AddSingleton<IToolRunner, PatentSearchRunner>(); // patent-search — persists searches so adviser chat works
 
         // 2026 batch — client-side calculators ported 1:1 to the backend
         services.AddSingleton<IToolRunner, BinomialResearchRunner>();

@@ -88,9 +88,37 @@ public sealed class GetToolBenchmarkQueryHandler(
         foreach (var (key, values) in acc)
         {
             if (values.Count == 0) continue;
-            result[key] = new BenchmarkStat(values.Min(), values.Max(), values.Average(), values.Count);
+            result[key] = new BenchmarkStat(
+                values.Min(),
+                values.Max(),
+                values.Average(),
+                values.Count,
+                Median(values),
+                TopQuartile(values));
         }
         return result;
+    }
+
+    /// <summary>Median of a sample (linear interpolation on the sorted list).</summary>
+    private static double Median(List<double> values)
+    {
+        if (values.Count == 0) return 0;
+        var sorted = values.OrderBy(v => v).ToList();
+        var mid = (sorted.Count - 1) / 2.0;
+        var lo = (int)Math.Floor(mid);
+        var hi = (int)Math.Ceiling(mid);
+        return sorted[lo] + (sorted[hi] - sorted[lo]) * (mid - lo);
+    }
+
+    /// <summary>75th percentile (top quartile) of a sample.</summary>
+    private static double TopQuartile(List<double> values)
+    {
+        if (values.Count == 0) return 0;
+        var sorted = values.OrderBy(v => v).ToList();
+        var pos = 0.75 * (sorted.Count - 1);
+        var lo = (int)Math.Floor(pos);
+        var hi = (int)Math.Ceiling(pos);
+        return sorted[lo] + (sorted[hi] - sorted[lo]) * (pos - lo);
     }
 
     /// <summary>
@@ -116,8 +144,18 @@ public sealed class GetToolBenchmarkQueryHandler(
                     {
                         if (r.ValueKind == JsonValueKind.Object)
                         {
+                            // STARTUP-ASSESS: one row per axis — the axis score "C" is 0–100.
                             var axisScore = ReadScore(r, prop: "C");
                             if (axisScore is { } v) metrics[$"axis{i}"] = v;
+                            // STARTUP-VAL: one row per valuation method — "h" is the
+                            // method's share of the blended value (0–1); the chart
+                            // scale is 0–100, so report h×100. Keyed by method id so
+                            // submissions aggregate per method.
+                            else if (r.TryGetProperty("h", out var hEl) && hEl.ValueKind == JsonValueKind.Number && hEl.TryGetDouble(out var h)
+                                     && h >= 0 && h <= 1
+                                     && r.TryGetProperty("id", out var idEl) && idEl.ValueKind == JsonValueKind.String
+                                     && idEl.GetString() is { } id)
+                                metrics[id] = h * 100;
                         }
                         i++;
                     }
@@ -151,6 +189,35 @@ public sealed class GetToolBenchmarkQueryHandler(
                         foreach (var (key, v) in raw)
                             metrics[key] = v * 10;
                 }
+                else if (root.TryGetProperty("patents", out var patents) && patents.ValueKind == JsonValueKind.Array)
+                {
+                    // IPscore: each patent carries { scores: { legal, tech, market,
+                    // finance, strategy } } (0–100). Every evaluated patent of
+                    // other users contributes to the same per-dimension aggregate.
+                    foreach (var p in patents.EnumerateArray())
+                    {
+                        if (p.ValueKind != JsonValueKind.Object) continue;
+                        if (!p.TryGetProperty("scores", out var sc) || sc.ValueKind != JsonValueKind.Object) continue;
+                        foreach (var prop in sc.EnumerateObject())
+                        {
+                            if (prop.Value.ValueKind == JsonValueKind.Number && prop.Value.TryGetDouble(out var d) && d >= 0 && d <= 100)
+                                metrics[prop.Name] = d;
+                        }
+                    }
+                }
+                else if (root.TryGetProperty("total", out var totEl) && totEl.ValueKind == JsonValueKind.Number && totEl.TryGetDouble(out var tot)
+                         && tot > 0
+                         && root.TryGetProperty("rd", out var rdEl) && rdEl.ValueKind == JsonValueKind.Object
+                         && root.TryGetProperty("hc", out var hcEl) && hcEl.ValueKind == JsonValueKind.Object
+                         && root.TryGetProperty("data", out var dataEl) && dataEl.ValueKind == JsonValueKind.Object)
+                {
+                    // INTANGIBLE: the result carries three module values whose sum
+                    // is "total"; the honest 0–100 per-dimension figure is each
+                    // module's share of that total.
+                    ModuleShare(rdEl, "value", tot, "rd", metrics);
+                    ModuleShare(hcEl, "blended", tot, "hc", metrics);
+                    ModuleShare(dataEl, "value", tot, "data", metrics);
+                }
                 else
                 {
                     // Flat numeric map (calculator-style stepScores).
@@ -167,6 +234,17 @@ public sealed class GetToolBenchmarkQueryHandler(
             // Corrupt/legacy result row — contributes nothing.
         }
         return metrics;
+    }
+
+    /// <summary>Reads a numeric property from a module object and reports it as
+    /// its share of the module total (0–100), used for the INTANGIBLE radar.</summary>
+    private static void ModuleShare(JsonElement module, string prop, double total, string key, Dictionary<string, double> metrics)
+    {
+        if (!module.TryGetProperty(prop, out var v) || v.ValueKind != JsonValueKind.Number || !v.TryGetDouble(out var d)) return;
+        if (d < 0) return;
+        var share = d / total * 100;
+        if (share > 100) return; // total drifted out of sync with the sum — skip the axis
+        metrics[key] = share;
     }
 
     /// <summary>Reads score/percent/value from a section object, clamped to 0..<paramref name="max"/>.</summary>

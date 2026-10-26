@@ -133,18 +133,77 @@ public sealed record GetMyToolAdviceThreadQuery(string ToolCode) : IRequest<MyAd
 /// <summary>Editable question list of one tool (falls back to seed content).</summary>
 public sealed record GetAdminToolQuestionsQuery(string ToolCode) : IRequest<List<AdminQuestionRow>>;
 
-/// <summary>Edits one question's text and/or option labels.</summary>
-public sealed record UpdateAdminToolQuestionCommand(
-    string ToolCode, string QuestionId, string? Text, List<QuestionOptionRow>? Options) : IRequest<AdminQuestionRow>;
+/// <summary>Tool info + questions of one tool for the bilingual content editor.</summary>
+public sealed record GetAdminToolContentQuery(string ToolCode) : IRequest<AdminToolContentRow>;
 
-/// <summary>Updates tool-level editable fields (title; description optional).</summary>
-public sealed record UpdateAdminToolCommand(string ToolCode, string? Title, string? Description) : IRequest<AdminToolRow>;
+/// <summary>
+///     Edits one question: fa lives on the question row, en in the localization row.
+///     Empty en values clear the override so the fa text is shown again.
+/// </summary>
+public sealed record UpdateAdminToolQuestionCommand(
+    string ToolCode, string QuestionId,
+    string? Text, string? TextEn,
+    string? SectionTitle, string? SectionTitleEn,
+    string? Placeholder, string? PlaceholderEn,
+    string? HelpText, string? HelpTextEn,
+    List<QuestionOptionRow>? Options, List<QuestionOptionRow>? OptionsEn) : IRequest<AdminQuestionRow>;
+
+/// <summary>Updates tool-level fields in both languages (fa base + en localization).</summary>
+public sealed record UpdateAdminToolCommand(
+    string ToolCode, string? Title, string? TitleEn,
+    string? Description, string? DescriptionEn) : IRequest<AdminToolRow>;
 
 /// <summary>Admin pricing builder: set advanced/advice prices (Toman) for one tool.</summary>
 public sealed record UpdateAdminToolPricesCommand(string ToolCode, long AdvancedPriceToman, long AdvicePriceToman) : IRequest<AdminToolPriceRow>;
 
 /// <summary>Members of one company (admin "see members" modal).</summary>
 public sealed record GetAdminCompanyMembersQuery(Guid CompanyId) : IRequest<List<AdminCompanyMemberRow>>;
+
+// ════════════════════════════════════════════════════════════════
+// Counter badges (new/unread items per admin section)
+// ══════════════════════════════════════════════════════════════
+
+/// <summary>Unread/new counters for the admin sidebar + news area (per admin "seen" state).</summary>
+public sealed record GetAdminCountersQuery : IRequest<AdminCountersResponse>;
+
+/// <summary>Acknowledges a section (clears its badge): stores the seen timestamp.</summary>
+public sealed record MarkAdminSectionSeenCommand(string SectionKey) : IRequest<Guid>;
+
+public sealed record AdminCountersResponse(
+    int NewSubmissions,
+    int NewCustomers,
+    int NewMessages,
+    int AdviserQueueUnseen);
+
+// ════════════════════════════════════════════════════════════════
+// Tool reporting (A1): per-tool aggregates with filters
+// ══════════════════════════════════════════════════════════════
+
+/// <summary>
+///     Server-side aggregates for one tool: overall score min/avg/max,
+///     per-dimension min/avg/max, submissions count, daily trend and the
+///     overall-score histogram. Filters: date range, industry, company.
+/// </summary>
+public sealed record GetAdminToolStatsQuery(
+    string ToolCode,
+    DateTime? From = null,
+    DateTime? To = null,
+    string? Industry = null,
+    Guid? CompanyId = null) : IRequest<AdminToolStatsResponse>;
+
+public sealed record AdminToolStatsStat(double Min, double Avg, double Max, int Count);
+
+public sealed record AdminToolStatsResponse(
+    string ToolCode,
+    int Count,
+    AdminToolStatsStat? Overall,
+    List<AdminToolDimensionRow> Dimensions,
+    List<AdminToolPoint> Trend,
+    List<AdminToolPoint> Histogram);
+
+public sealed record AdminToolDimensionRow(string Key, double Min, double Avg, double Max, int Count);
+
+public sealed record AdminToolPoint(string Label, double Value);
 
 // ════════════════════════════════════════════════════════════════
 // User management (admin staff administration)

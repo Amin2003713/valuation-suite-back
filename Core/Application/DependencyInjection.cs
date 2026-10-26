@@ -30,6 +30,9 @@ public static class DependencyInjection
         // Entitlements (pro / per-tool grants / pick-credits)
         services.AddScoped<Application.Tools.IEntitlementService, Application.Tools.EntitlementService>();
 
+        // Adviser ask rate limiting (per-user sliding window)
+        services.AddSingleton<Application.Adviser.IAdviserRateLimiter, Application.Adviser.AdviserRateLimiter>();
+
         return services;
     }
 }

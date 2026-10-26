@@ -24,7 +24,6 @@ public sealed class WipoDiagnosticsSubmission : ToolSubmissionBase;
 
 public sealed class IpscoreSubmission : ToolSubmissionBase;
 
-public sealed class PatentSearchSubmission : ToolSubmissionBase;
 
 public sealed class StartupValuationSubmission : ToolSubmissionBase;
 
@@ -39,8 +38,6 @@ public sealed class PatentValuationSubmission : ToolSubmissionBase;
 public sealed class PharmaPatentValuationSubmission : ToolSubmissionBase;
 
 public sealed class IntangibleAssetsSubmission : ToolSubmissionBase;
-
-public sealed class KnowhowValuationSubmission : ToolSubmissionBase;
 
 public sealed class IconScorecardSubmission : ToolSubmissionBase;
 

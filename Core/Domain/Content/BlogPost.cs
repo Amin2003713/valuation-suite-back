@@ -24,18 +24,23 @@ public sealed class BlogPost : BaseEntity
     /// <summary>Draft posts stay admin-only until Published, then go public.</summary>
     public BlogPostStatus Status { get; set; } = BlogPostStatus.Draft;
 
+    /// <summary>
+    ///     Release date. Admin-manageable: set/override from the admin editor;
+    ///     Publish() only stamps "now" when no explicit date was chosen.
+    /// </summary>
     public DateTime? PublishedAt { get; set; }
 
     public void Publish()
     {
         Status = BlogPostStatus.Published;
-        PublishedAt = DateTime.UtcNow;
+        // Keep an admin-set release date; stamp now only as the default.
+        PublishedAt ??= DateTime.UtcNow;
     }
 
     public void Unpublish()
     {
+        // Keep PublishedAt so a re-publish restores the original release date.
         Status = BlogPostStatus.Draft;
-        PublishedAt = null;
     }
 }
 

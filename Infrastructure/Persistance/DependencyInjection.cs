@@ -129,6 +129,7 @@ public static class DependencyInjection
         services.AddScoped<Application.Interfaces.IToolQuestionQueries, Repositories.ToolQuestionQueries>();
         services.AddScoped<Application.Interfaces.IToolContentQueries, Repositories.ToolContentQueries>();
         services.AddScoped<Application.Interfaces.IToolQuestionStore, Repositories.ToolQuestionStore>();
+        services.AddScoped<Application.Interfaces.IToolLocalizationStore, Repositories.ToolLocalizationStore>();
         services.AddScoped<ICommandRepository<Domain.Tools.ToolForm>, Repositories.Common.CommandRepository<Domain.Tools.ToolForm>>();
         services.AddScoped<IQueryRepository<Domain.Tools.ToolForm>, Repositories.Common.QueryRepository<Domain.Tools.ToolForm>>();
         services.AddScoped<Application.Interfaces.IAdminQueryRepository, Repositories.Admin.AdminQueryRepository>();

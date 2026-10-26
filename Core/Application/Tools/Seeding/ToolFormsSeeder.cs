@@ -23,6 +23,9 @@ public interface IToolFormsDbContext
 /// </summary>
 public static class ToolFormsSeeder
 {
+    /// <summary>Tool codes that are no longer part of the product.</summary>
+    private static readonly string[] RetiredToolCodes = ["KNOWHOW"];
+
     public static async Task SeedAsync(IToolFormsDbContext db, ILogger logger, CancellationToken ct = default)
     {
         var existingRows = await db.Set<ToolForm>().ToListAsync(ct);
@@ -36,6 +39,12 @@ public static class ToolFormsSeeder
             db.Set<ToolForm>().Add(ToolForm.Create(d.Code, d.Title, d.Description, d.Kind, d.Schema, d.Sort,
                 advancedPriceToman: advanced, route: route, advicePriceToman: advice));
         }
+
+        /* Tools retired from the product: the catalog row is removed on startup so
+         * the tool is no longer served by /api/tools. Historical submission rows
+         * and their tables are left untouched. */
+        var retired = existingRows.Where(t => RetiredToolCodes.Contains(t.ToolCode, StringComparer.OrdinalIgnoreCase)).ToList();
+        if (retired.Count > 0) db.Set<ToolForm>().RemoveRange(retired);
 
         /* Tool-level localization rows: one (language, "") row per tool in its own
          * <Tool>Localizations table, carrying the non-default language title/description
@@ -59,14 +68,15 @@ public static class ToolFormsSeeder
             filled++;
         }
 
-        if (forms.Count == 0 && filled == 0)
+        if (forms.Count == 0 && filled == 0 && retired.Count == 0)
         {
             logger.LogInformation("Tool forms seed already present, skipping");
             return;
         }
 
         await db.SaveChangesAsync(ct);
-        logger.LogInformation("Seeded {New} tool form definitions, {Filled} tool-info localization rows", forms.Count, filled);
+        logger.LogInformation("Seeded {New} tool form definitions, {Filled} tool-info localization rows, retired {Retired} tools",
+            forms.Count, filled, retired.Count);
     }
 
     /// <summary>Runtime-typed DbSet for a per-tool entity (seeders).</summary>
@@ -89,14 +99,12 @@ public static class ToolFormsSeeder
         ["JOB-EVAL"] = ("Job Values Assessment", "Discover your core work values and the right job"),
         ["WIPO-DIAG"] = ("WIPO Diagnostics", "Intellectual property health check (WIPO)"),
         ["IPSCORE"] = ("IPscore — Patent Assessment", "Patent portfolio assessment (5 question groups + NPV)"),
-        ["PATENT-SEARCH"] = ("Patent Search", "Advanced patent search (Lens.org) + expert review"),
         ["STARTUP-VAL"] = ("Startup Valuation", "9 valuation methods with stage weights"),
         ["BRAND-VAL"] = ("Brand Valuation", "RFR + Premium Profit + ICF + scenarios + Monte Carlo"),
         ["TRADEMARK-VAL"] = ("Trademark Valuation", "7 methods + Monte Carlo + weighted reconciliation"),
         ["PATENT-VAL"] = ("Patent Valuation (General)", "DCF + RFR + Black-Scholes + binomial + Monte Carlo"),
         ["PHARMA-IP"] = ("Pharma Patent Valuation", "The general patent engine with pharma defaults"),
         ["INTANGIBLE"] = ("Intangible Assets", "R&D + human capital + data assets + Monte Carlo"),
-        ["KNOWHOW"] = ("Know-How Valuation", "Reproduction/replacement + RFR + market + scorecard"),
         ["ICON-SCORECARD"] = ("Trademark Valuation (Icon Scorecard)", "RFR + Premium + market + control scorecard + Monte Carlo range"),
         ["BINOMIAL"] = ("Research Real-Option (Binomial)", "Cox–Ross–Rubinstein binomial tree with American exercise"),
         ["SOFT-VAL"] = ("Software Valuation Framework", "6 valuation methods + WACC + Tornado + Monte Carlo"),
@@ -123,13 +131,13 @@ public static class ToolFormsSeeder
             ["JOB-EVAL"] = (0, 120_000, "job-evaluation"),          // fully free, advice only
             ["WIPO-DIAG"] = (120_000, 150_000, "wipo-diagnostics"),
             ["IPSCORE"] = (150_000, 200_000, "patent-valuation"),
+            // PATENT-SEARCH intentionally removed from the product.
             ["STARTUP-VAL"] = (120_000, 250_000, "startup-valuation"),
             ["BRAND-VAL"] = (150_000, 300_000, "brand-valuation"),
             ["TRADEMARK-VAL"] = (120_000, 250_000, "trademark-valuation"),
             ["PATENT-VAL"] = (150_000, 250_000, "general-ip-valuation"),
             ["PHARMA-IP"] = (120_000, 300_000, "pharma-ip-valuation"),
             ["INTANGIBLE"] = (100_000, 250_000, "intangible-assets"),
-            ["KNOWHOW"] = (100_000, 250_000, "knowhow-valuation"),
             ["ICON-SCORECARD"] = (120_000, 250_000, "icon-scorecard"),
             // Search runs client-side (Lens.org); the row exists so the run is
             // persisted as a submission and the paid adviser chat is offered.
@@ -303,27 +311,12 @@ public static class ToolFormsSeeder
                 defaults = new { discountRate = 0.30, ltGrowth = 0.05, taxRate = 0.20 },
             }), 15),
 
-        ("KNOWHOW", "ارزش‌گذاری دانش فنی (Know-How)", "بازتولید/جایگزینی + RFR + بازار + کارت امتیازی", ToolKind.Calculator,
-            Json(new
-            {
-                currency = "میلیون ریال",
-                defaults = new { overheadPct = 35, developerProfitPct = 15, entrepreneurIncentivePct = 10, functionalObsolescencePct = 15, economicObsolescencePct = 5, discountRate = 22, royaltyRate = 4 },
-            }), 16),
-
         ("ICON-SCORECARD", "ارزش‌گذاری علامت تجاری (Icon Scorecard)", "RFR + Premium + بازار + Scorecard کنترلی + دامنه Monte Carlo", ToolKind.Calculator,
             Json(new
             {
                 currency = "ریال",
                 defaults = new { baseRevenue = 100_000_000_000, growth = 0.2, royalty = 0.02, tax = 0.2, discount = 0.25, maintenance = 50_000_000, attribution = 0.7, legalRisk = 1, premiumRate = 0.05, margin = 0.6, marketRoyalty = 0.02, similarity = 0.8, geo = 1, legalFactor = 1, mcGrowthLow = 0.08, mcGrowthHigh = 0.35 },
             }), 17),
-
-        ("PATENT-SEARCH", "جستجوی پتنت", "جستجوی پیشرفته اختراعات (Lens.org) + بررسی کارشناسی", ToolKind.Assessment,
-            Json(new
-            {
-                source = "Lens.org",
-                translation = "MyMemory",
-                fields = new[] { "title1", "title2", "abstract1", "abstract2", "claim1", "claim2" },
-            }), 7),
 
         // ─────────────────── 2026 batch: ported client-side tools ───────────────────
         ("BINOMIAL", "گزینه‌ای دوجمله‌ای پژوهش", "درخت دوجمله‌ای Cox–Ross–Rubinstein با اعمال آمریکایی", ToolKind.Calculator,

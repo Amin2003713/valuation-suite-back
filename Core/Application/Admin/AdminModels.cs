@@ -147,9 +147,24 @@ public sealed record MyAdviceThreadResponse(
 /// <summary>One editable option row of a question.</summary>
 public sealed record QuestionOptionRow(string Value, string Label);
 
-/// <summary>Editable question row (text + option labels) for the admin tools editor.</summary>
+/// <summary>
+///     Editable question row for the admin tools editor. fa is the base value stored on
+///     the question row; en is the localization override (null/empty = fall back to fa).
+/// </summary>
 public sealed record AdminQuestionRow(
-    string Id, string? SectionKey, string? SectionTitle, string Text, List<QuestionOptionRow> Options);
+    string Id, string? SectionKey,
+    string? SectionTitle, string? SectionTitleEn,
+    string Text, string TextEn,
+    string? Placeholder, string? PlaceholderEn,
+    string? HelpText, string? HelpTextEn,
+    List<QuestionOptionRow> Options, List<QuestionOptionRow> OptionsEn);
+
+/// <summary>Everything the admin content editor needs for one tool, in both languages.</summary>
+public sealed record AdminToolContentRow(
+    string ToolCode,
+    string Title, string? TitleEn,
+    string? Description, string? DescriptionEn,
+    List<AdminQuestionRow> Questions);
 
 /// <summary>Member of a company (admin "see members" modal).</summary>
 public sealed record AdminCompanyMemberRow(

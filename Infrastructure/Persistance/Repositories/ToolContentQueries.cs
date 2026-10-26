@@ -161,3 +161,38 @@ public sealed class ToolQuestionStore(ValuationDbContext db) : IToolQuestionStor
 
     public Task<int> SaveChangesAsync(CancellationToken ct = default) => db.SaveChangesAsync(ct);
 }
+
+/// <summary>
+///     Tracked per-tool localization access for admin bilingual edits. The table is
+///     small, so a tracked materialize + in-memory match keeps the runtime-type lookup
+///     simple while SaveChanges still persists edits.
+/// </summary>
+public sealed class ToolLocalizationStore(ValuationDbContext db) : IToolLocalizationStore
+{
+    public async Task<ToolLocalizationBase?> FindAsync(
+        string toolCode, string language, string questionId, CancellationToken ct = default)
+    {
+        if (!ToolRegistry.TryGetLocalization(toolCode, out var type))
+            return null;
+
+        var set = (IQueryable)typeof(DbContext)
+            .GetMethod(nameof(DbContext.Set), Type.EmptyTypes)!
+            .MakeGenericMethod(type)
+            .Invoke(db, null)!;
+
+        var rows = await set.Cast<ToolLocalizationBase>().ToListAsync(ct);
+
+        return rows.FirstOrDefault(l =>
+            string.Equals(l.Language, language, StringComparison.OrdinalIgnoreCase) &&
+            l.QuestionId == questionId);
+    }
+
+    public ToolLocalizationBase Create(string toolCode, string language, string questionId)
+    {
+        var row = ToolRegistry.CreateLocalization(toolCode, language, questionId);
+        db.Add(row);
+        return row;
+    }
+
+    public Task<int> SaveChangesAsync(CancellationToken ct = default) => db.SaveChangesAsync(ct);
+}

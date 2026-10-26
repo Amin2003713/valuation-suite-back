@@ -70,3 +70,19 @@ public interface IToolQuestionStore
 
     Task<int> SaveChangesAsync(CancellationToken ct = default);
 }
+
+/// <summary>
+///     Tracked write access to per-tool localization rows (admin bilingual edits).
+///     Creates runtime-typed rows for a tool's own localization table.
+/// </summary>
+public interface IToolLocalizationStore
+{
+    /// <summary>Tracked row for (toolCode, language, questionId), or null.</summary>
+    Task<ToolLocalizationBase?> FindAsync(
+        string toolCode, string language, string questionId, CancellationToken ct = default);
+
+    /// <summary>Creates and tracks a new localization row for the tool/language.</summary>
+    ToolLocalizationBase Create(string toolCode, string language, string questionId);
+
+    Task<int> SaveChangesAsync(CancellationToken ct = default);
+}

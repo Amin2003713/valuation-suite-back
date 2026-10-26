@@ -192,6 +192,77 @@ public class AdminController(
     public async Task<IActionResult> Analytics(CancellationToken ct)
         => Ok(await mediator.Send(new GetAdminAnalyticsQuery(), ct));
 
+    /// <summary>
+    ///     Sidebar/news badge counters (new items since the caller's last ack).
+    ///     Poll ~30s from the admin shell; POST to counters/seen clears a badge.
+    /// </summary>
+    [HttpGet("counters")]
+    [Authorize(Policy = "perm:dashboard.view")]
+    public async Task<IActionResult> Counters(CancellationToken ct)
+        => Ok(await mediator.Send(new GetAdminCountersQuery(), ct));
+
+    /// <summary>Acknowledges a section (submissions | customers | messaging | adviser-queue).</summary>
+    [HttpPost("counters/seen")]
+    [Authorize(Policy = "perm:dashboard.view")]
+    public async Task<IActionResult> MarkSeen([FromBody] SeenBody body, CancellationToken ct)
+    {
+        await mediator.Send(new MarkAdminSectionSeenCommand(body.SectionKey), ct);
+        return Ok(new { seen = true });
+    }
+
+    public sealed record SeenBody(string SectionKey);
+
+    /// <summary>
+    ///     Reporting aggregates for one tool with filters (date range, industry,
+    ///     company): count, overall min/avg/max, per-dimension min/avg/max,
+    ///     daily trend and overall-score histogram.
+    /// </summary>
+    [HttpGet("tool-stats")]
+    [Authorize(Policy = "perm:dashboard.view")]
+    public async Task<IActionResult> ToolStats(
+        [FromQuery] string toolCode,
+        [FromQuery] DateTime? from,
+        [FromQuery] DateTime? to,
+        [FromQuery] string? industry,
+        [FromQuery] Guid? companyId,
+        CancellationToken ct)
+        => Ok(await mediator.Send(
+            new GetAdminToolStatsQuery(toolCode, from, to, industry, companyId), ct));
+
+    /// <summary>
+    ///     CSV export of one tool's submissions (same filters as tool-stats).
+    ///     Date-range/industry filters run through the stats query handler;
+    ///     the explorer query covers tool + paged rows.
+    /// </summary>
+    [HttpGet("tool-stats/export")]
+    [Authorize(Policy = "perm:dashboard.view")]
+    public async Task<IActionResult> ExportToolSubmissions(
+        [FromQuery] string toolCode,
+        [FromQuery] DateTime? from,
+        [FromQuery] DateTime? to,
+        CancellationToken ct)
+    {
+        var page = await mediator.Send(
+            new GetAdminSubmissionsQuery(1, 10_000, toolCode, null, null), ct);
+
+        var lo = from?.Date ?? DateTime.MinValue;
+        var hiEx = to == null || to == DateTime.MaxValue ? DateTime.MaxValue : to.Value.Date.AddDays(1);
+
+        var sb = new StringBuilder("CreatedAt,UserEmail,ToolCode,Name,OverallScore\n");
+        foreach (var s in page.Items)
+        {
+            if (s.CreatedAt < lo || s.CreatedAt >= hiEx) continue;
+            sb.Append(s.CreatedAt.ToString("O")).Append(',')
+              .Append('"').Append(s.UserEmail.Replace("\"", "\"\"")).Append("\",")
+              .Append(s.ToolCode).Append(',')
+              .Append('"').Append((s.Name ?? string.Empty).Replace("\"", "\"\"")).Append("\",")
+              .Append(s.OverallScore is { } sc ? sc.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) : string.Empty)
+              .Append('\n');
+        }
+
+        return File(Encoding.UTF8.GetBytes(sb.ToString()), "text/csv", $"{toolCode}-submissions-{DateTime.UtcNow:yyyyMMdd}.csv");
+    }
+
     /// <summary>All active tool-access grants (optionally by user).</summary>
     [HttpGet("grants")]
     [Authorize(Policy = "perm:access.manage")]
@@ -274,19 +345,31 @@ public class AdminController(
     public async Task<IActionResult> ToolQuestions(string code, CancellationToken ct)
         => Ok(await mediator.Send(new GetAdminToolQuestionsQuery(code), ct));
 
+    /// <summary>Tool info + questions in both languages for the content editor.</summary>
+    [HttpGet("tools/{code}/content")]
+    [Authorize(Policy = "perm:submissions.read")]
+    public async Task<IActionResult> ToolContent(string code, CancellationToken ct)
+        => Ok(await mediator.Send(new GetAdminToolContentQuery(code), ct));
+
     /// <summary>Rename a question and/or its option labels.</summary>
     [HttpPut("tools/{code}/questions/{questionId}")]
     [Authorize(Policy = "perm:customers.manage")]
     public async Task<IActionResult> UpdateToolQuestion(
         string code, string questionId, [FromBody] UpdateQuestionRequest request, CancellationToken ct)
         => Ok(await mediator.Send(new UpdateAdminToolQuestionCommand(
-            code, questionId, request.Text, request.Options), ct));
+            code, questionId,
+            request.Text, request.TextEn,
+            request.SectionTitle, request.SectionTitleEn,
+            request.Placeholder, request.PlaceholderEn,
+            request.HelpText, request.HelpTextEn,
+            request.Options, request.OptionsEn), ct));
 
     /// <summary>Tool-level fields: title / description.</summary>
     [HttpPut("tools/{code}")]
     [Authorize(Policy = "perm:customers.manage")]
     public async Task<IActionResult> UpdateTool(string code, [FromBody] UpdateToolRequest request, CancellationToken ct)
-        => Ok(await mediator.Send(new UpdateAdminToolCommand(code, request.Title, request.Description), ct));
+        => Ok(await mediator.Send(new UpdateAdminToolCommand(
+            code, request.Title, request.TitleEn, request.Description, request.DescriptionEn), ct));
 
     /// <summary>Members of one company ("see members" modal).</summary>
     [HttpGet("companies/{id:guid}/members")]
@@ -294,8 +377,15 @@ public class AdminController(
     public async Task<IActionResult> CompanyMembers(Guid id, CancellationToken ct)
         => Ok(await mediator.Send(new GetAdminCompanyMembersQuery(id), ct));
 
-    public sealed record UpdateQuestionRequest(string? Text, List<QuestionOptionRow>? Options);
-    public sealed record UpdateToolRequest(string? Title, string? Description);
+    public sealed record UpdateQuestionRequest(
+        string? Text, string? TextEn,
+        string? SectionTitle, string? SectionTitleEn,
+        string? Placeholder, string? PlaceholderEn,
+        string? HelpText, string? HelpTextEn,
+        List<QuestionOptionRow>? Options, List<QuestionOptionRow>? OptionsEn);
+
+    public sealed record UpdateToolRequest(
+        string? Title, string? TitleEn, string? Description, string? DescriptionEn);
 
     public sealed record SetRolesRequest(List<string> Roles);
     public sealed record GrantRequest(Guid UserId, string ToolCode, int? Days);

@@ -1,4 +1,7 @@
+using System.Text.Json;
 using Application.Admin;
+using Application.Interfaces;
+using Application.Tools;
 using Application.Interfaces.Base;
 using Common.Exceptions;
 using Domain.Payments;
@@ -20,6 +23,7 @@ public static class AdminToolContentHandlers
 
     public sealed class GetAdminToolQuestionsQueryHandler(
         Application.Interfaces.IToolQuestionQueries questions,
+        IToolContentQueries localizations,
         IQueryRepository<ToolForm> tools)
         : IRequestHandler<GetAdminToolQuestionsQuery, List<AdminQuestionRow>>
     {
@@ -31,10 +35,45 @@ public static class AdminToolContentHandlers
                 .OrderBy(q => q.SortOrder)
                 .ToListAsync(ct);
 
-            return rows.Select(q => new AdminQuestionRow(
-                q.QuestionId, q.SectionKey, q.SectionTitle, q.Text,
-                Application.Tools.QuestionOptions.Parse(q.OptionsJson)
-                    .Select(o => new QuestionOptionRow(o.Value, o.Label)).ToList())).ToList();
+            var en = (await localizations.ByTool(request.ToolCode)
+                    .Where(l => l.Language == "en")
+                    .ToListAsync(ct))
+                .ToDictionary(l => l.QuestionId, StringComparer.Ordinal);
+
+            return rows.Select(q => ToAdminRow(q, en.GetValueOrDefault(q.QuestionId))).ToList();
+        }
+    }
+
+    // ─── GET /api/admin/tools/{code}/content ─────────────────────────────
+
+    public sealed class GetAdminToolContentQueryHandler(
+        Application.Interfaces.IToolQuestionQueries questions,
+        IToolContentQueries localizations,
+        IQueryRepository<ToolForm> tools)
+        : IRequestHandler<GetAdminToolContentQuery, AdminToolContentRow>
+    {
+        public async Task<AdminToolContentRow> Handle(GetAdminToolContentQuery request, CancellationToken ct)
+        {
+            var form = await tools.TableNoTracking
+                .FirstOrDefaultAsync(t => t.ToolCode == request.ToolCode, ct)
+                ?? throw ValuationException.NotFound("ابزار یافت نشد.");
+
+            var rows = await questions.ByTool(request.ToolCode)
+                .OrderBy(q => q.SortOrder)
+                .ToListAsync(ct);
+
+            var en = (await localizations.ByTool(request.ToolCode)
+                    .Where(l => l.Language == "en")
+                    .ToListAsync(ct))
+                .ToDictionary(l => l.QuestionId, StringComparer.Ordinal);
+
+            var info = en.GetValueOrDefault(ToolLocalizationBase.ToolLevelQuestionId);
+
+            return new AdminToolContentRow(
+                request.ToolCode,
+                form.Title, info?.Title,
+                form.Description, info?.Description,
+                rows.Select(q => ToAdminRow(q, en.GetValueOrDefault(q.QuestionId))).ToList());
         }
     }
 
@@ -42,6 +81,7 @@ public static class AdminToolContentHandlers
 
     public sealed class UpdateAdminToolQuestionCommandHandler(
         Application.Interfaces.IToolQuestionStore questions,
+        IToolLocalizationStore localizations,
         IQueryRepository<ToolForm> tools)
         : IRequestHandler<UpdateAdminToolQuestionCommand, AdminQuestionRow>
     {
@@ -52,22 +92,55 @@ public static class AdminToolContentHandlers
             var entity = await questions.FindAsync(request.ToolCode, request.QuestionId, ct)
                 ?? throw ValuationException.NotFound("سوال یافت نشد.");
 
+            // ── fa base columns ──
             if (request.Text is { } text)
             {
                 if (string.IsNullOrWhiteSpace(text))
                     throw ValuationException.BadRequest("متن سوال نمی‌تواند خالی باشد.");
                 entity.UpdateText(text.Trim());
             }
-
+            if (request.SectionTitle is { } sectionTitle) entity.SectionTitle = NullIfEmpty(sectionTitle);
+            if (request.Placeholder is { } placeholder) entity.Placeholder = NullIfEmpty(placeholder);
+            if (request.HelpText is { } helpText) entity.HelpText = NullIfEmpty(helpText);
             if (request.Options is { } options)
                 entity.UpdateOptions(options.Select(o => (o.Value, o.Label)));
 
+            // ── en localization row (null = fall back to fa) ──
+            var touchesEn = request.TextEn is not null || request.SectionTitleEn is not null
+                || request.PlaceholderEn is not null || request.HelpTextEn is not null
+                || request.OptionsEn is not null;
+
+            ToolLocalizationBase? loc = null;
+            if (touchesEn)
+            {
+                loc = await localizations.FindAsync(request.ToolCode, "en", request.QuestionId, ct)
+                    ?? localizations.Create(request.ToolCode, "en", request.QuestionId);
+
+                if (request.TextEn is { } textEn) loc.Text = NullIfEmpty(textEn);
+                if (request.SectionTitleEn is { } sectionTitleEn) loc.SectionTitle = NullIfEmpty(sectionTitleEn);
+                if (request.PlaceholderEn is { } placeholderEn) loc.Placeholder = NullIfEmpty(placeholderEn);
+                if (request.HelpTextEn is { } helpTextEn) loc.HelpText = NullIfEmpty(helpTextEn);
+                if (request.OptionsEn is { } optionsEn)
+                    loc.OptionsJson = optionsEn.Count == 0 ? null : SerializeOptions(optionsEn);
+            }
+
             await questions.SaveChangesAsync(ct);
 
+            var locRow = loc is null
+                ? (await localizations.FindAsync(request.ToolCode, "en", request.QuestionId, ct))
+                : null;
+
+            var optionsFa = entity.Options().Select(o => new QuestionOptionRow(o.Value, o.Label)).ToList();
+            var optionsEnRows = QuestionOptions.Parse(loc?.OptionsJson ?? locRow?.OptionsJson)
+                .Select(o => new QuestionOptionRow(o.Value, o.Label)).ToList();
 
             return new AdminQuestionRow(
-                entity.QuestionId, entity.SectionKey, entity.SectionTitle, entity.Text,
-                entity.Options().Select(o => new QuestionOptionRow(o.Value, o.Label)).ToList());
+                entity.QuestionId, entity.SectionKey,
+                entity.SectionTitle, loc?.SectionTitle ?? locRow?.SectionTitle,
+                entity.Text, loc?.Text ?? locRow?.Text ?? "",
+                entity.Placeholder, loc?.Placeholder ?? locRow?.Placeholder,
+                entity.HelpText, loc?.HelpText ?? locRow?.HelpText,
+                optionsFa, optionsEnRows);
         }
     }
 
@@ -75,7 +148,8 @@ public static class AdminToolContentHandlers
 
     public sealed class UpdateAdminToolCommandHandler(
         ICommandRepository<ToolForm> tools,
-        IQueryRepository<ToolForm> toolQueries)
+        IQueryRepository<ToolForm> toolQueries,
+        IToolLocalizationStore localizations)
         : IRequestHandler<UpdateAdminToolCommand, AdminToolRow>
     {
         public async Task<AdminToolRow> Handle(UpdateAdminToolCommand request, CancellationToken ct)
@@ -89,7 +163,18 @@ public static class AdminToolContentHandlers
             if (request.Description is not null)
                 tool.Description = request.Description.Trim() is { Length: > 0 } d ? d : null;
 
+            if (request.TitleEn is not null || request.DescriptionEn is not null)
+            {
+                var info = await localizations.FindAsync(
+                        request.ToolCode, "en", ToolLocalizationBase.ToolLevelQuestionId, ct)
+                    ?? localizations.Create(request.ToolCode, "en", ToolLocalizationBase.ToolLevelQuestionId);
+
+                if (request.TitleEn is { } titleEn) info.Title = NullIfEmpty(titleEn);
+                if (request.DescriptionEn is { } descriptionEn) info.Description = NullIfEmpty(descriptionEn);
+            }
+
             await tools.SaveChangesAsync(ct);
+            await localizations.SaveChangesAsync(ct);
 
             var uses = await toolQueries.TableNoTracking
                 .Where(t => t.ToolCode == tool.ToolCode)
@@ -178,4 +263,25 @@ public static class AdminToolContentHandlers
         if (!await tools.TableNoTracking.AnyAsync(t => t.ToolCode == toolCode, ct))
             throw ValuationException.NotFound("ابزار یافت نشد.");
     }
+
+    private static AdminQuestionRow ToAdminRow(ToolQuestionRow q, ToolLocalizationRow? en) =>
+        new(
+            q.QuestionId, q.SectionKey,
+            q.SectionTitle, en?.SectionTitle,
+            q.Text, en?.Text ?? "",
+            q.Placeholder, en?.Placeholder,
+            q.HelpText, en?.HelpText,
+            QuestionOptions.Parse(q.OptionsJson)
+                .Select(o => new QuestionOptionRow(o.Value, o.Label)).ToList(),
+            QuestionOptions.Parse(en?.OptionsJson)
+                .Select(o => new QuestionOptionRow(o.Value, o.Label)).ToList());
+
+    private static string? NullIfEmpty(string value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static string SerializeOptions(IEnumerable<QuestionOptionRow> options) =>
+        JsonSerializer.Serialize(
+            options.Where(o => !string.IsNullOrWhiteSpace(o.Value))
+                .Select(o => new { value = o.Value, label = o.Label }),
+            new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
 }

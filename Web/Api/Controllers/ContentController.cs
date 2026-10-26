@@ -3,9 +3,11 @@ using Application.Interfaces;
 using Application.Interfaces.Base;
 using Common.Exceptions;
 using Domain.Content;
+using Ganss.Xss;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Text.RegularExpressions;
 
 namespace Web.Api.Controllers;
 
@@ -24,6 +26,50 @@ public class ContentController(
 {
     private static bool IsValidHttpUrl(string? url) =>
         Uri.TryCreate(url, UriKind.Absolute, out var u) && (u.Scheme == Uri.UriSchemeHttp || u.Scheme == Uri.UriSchemeHttps);
+
+    // ─── Blog body HTML ─────────────────────────────────────────────────────
+
+    /// <summary>
+    ///     Allowlist sanitizer for post bodies written by the admin rich-text
+    ///     editor: formatting, lists, links, images and simple tables only — no
+    ///     scripts, event handlers, inline styles or data: URLs. Bodies saved
+    ///     before the HTML editor (plain text + "## " headings) contain no tags
+    ///     and pass through untouched for the legacy renderer.
+    /// </summary>
+    private static readonly Regex HtmlTag = new("<[a-z!/][^>]*>", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    private static readonly HtmlSanitizer BlogBodySanitizer = CreateBlogBodySanitizer();
+
+    private static HtmlSanitizer CreateBlogBodySanitizer()
+    {
+        var sanitizer = new HtmlSanitizer { KeepChildNodes = true };
+
+        sanitizer.AllowedTags.Clear();
+        sanitizer.AllowedTags.UnionWith(
+        [
+            "p", "br", "h2", "h3", "h4", "strong", "b", "em", "i", "u", "s", "sub", "sup",
+            "ul", "ol", "li", "blockquote", "a", "img", "figure", "figcaption",
+            "code", "pre", "hr", "table", "thead", "tbody", "tr", "th", "td",
+        ]);
+
+        sanitizer.AllowedAttributes.Clear();
+        sanitizer.AllowedAttributes.UnionWith(
+        [
+            "href", "title", "target", "rel", "src", "alt", "width", "height", "dir",
+            "colspan", "rowspan",
+        ]);
+
+        sanitizer.AllowedSchemes.Clear();
+        sanitizer.AllowedSchemes.UnionWith(["http", "https", "mailto"]);
+
+        sanitizer.AllowedCssProperties.Clear();
+        sanitizer.AllowedAtRules.Clear();
+
+        return sanitizer;
+    }
+
+    private static string SanitizeBlogBody(string body) =>
+        HtmlTag.IsMatch(body) ? BlogBodySanitizer.Sanitize(body).Trim() : body;
 
     // ─── Footer links — public ──────────────────────────────────────────────
 
@@ -168,7 +214,7 @@ public class ContentController(
 
     public record AdminBlogDto(Guid Id, string Slug, string TitleFa, string TitleEn, BlogPostStatus Status, DateTime? PublishedAt, DateTime CreatedAt, bool IsActive);
 
-    public record UpsertBlogRequest(string? Slug, string? TitleFa, string? TitleEn, string? SummaryFa, string? SummaryEn, string? BodyFa, string? BodyEn);
+    public record UpsertBlogRequest(string? Slug, string? TitleFa, string? TitleEn, string? SummaryFa, string? SummaryEn, string? BodyFa, string? BodyEn, DateTime? PublishedAt);
 
     [HttpPost("admin/blog")]
     [Authorize(Policy = "perm:content.manage")]
@@ -180,7 +226,7 @@ public class ContentController(
         var dup = await blogQueries.TableNoTracking.AnyAsync(p => p.Slug == slug, ct);
         if (dup) throw new ValuationException("این نامک (slug) قبلاً استفاده شده است.");
 
-        var entity = new BlogPost { Slug = slug!, TitleFa = titleFa!, TitleEn = titleEn!, SummaryFa = sumFa, SummaryEn = sumEn, BodyFa = bodyFa, BodyEn = bodyEn };
+        var entity = new BlogPost { Slug = slug!, TitleFa = titleFa!, TitleEn = titleEn!, SummaryFa = sumFa, SummaryEn = sumEn, BodyFa = bodyFa, BodyEn = bodyEn, PublishedAt = ClampedPublishedAt(req.PublishedAt) };
         blogCommands.Add(entity, saveNow: false);
         await blogCommands.SaveChangesAsync(ct);
         return Ok(new { id = entity.Id });
@@ -201,23 +247,29 @@ public class ContentController(
 
         entity.Slug = slug!; entity.TitleFa = titleFa!; entity.TitleEn = titleEn!;
         entity.SummaryFa = sumFa; entity.SummaryEn = sumEn; entity.BodyFa = bodyFa; entity.BodyEn = bodyEn;
+        entity.PublishedAt = ClampedPublishedAt(req.PublishedAt);
         await blogCommands.SaveChangesAsync(ct);
         return Ok(new { id });
     }
 
-    /// <summary>Publish / unpublish (draft ⇄ live).</summary>
+    /// <summary>Publish / unpublish (draft ⇄ live). Optional `at` overrides the release date.</summary>
     [HttpPost("admin/blog/{id:guid}/publish")]
     [Authorize(Policy = "perm:content.manage")]
-    public async Task<IActionResult> PublishBlogPost(Guid id, [FromQuery] bool publish = true, CancellationToken ct = default)
+    public async Task<IActionResult> PublishBlogPost(Guid id, [FromQuery] bool publish = true, [FromQuery] DateTime? at = null, CancellationToken ct = default)
     {
         var entity = await blogCommands.Table.FirstOrDefaultAsync(p => p.Id == id, ct);
         if (entity is null) return NotFound();
         if (publish && entity.Status == BlogPostStatus.Draft &&
             (string.IsNullOrWhiteSpace(entity.BodyFa) && string.IsNullOrWhiteSpace(entity.BodyEn)))
             throw new ValuationException("برای انتشار، متن پست لازم است (فارسی یا انگلیسی).");
-        if (publish) entity.Publish(); else entity.Unpublish();
+        if (publish)
+        {
+            entity.Publish();
+            if (at is not null) entity.PublishedAt = ClampedPublishedAt(at);
+        }
+        else entity.Unpublish();
         await blogCommands.SaveChangesAsync(ct);
-        return Ok(new { id, status = entity.Status.ToString() });
+        return Ok(new { id, status = entity.Status.ToString(), publishedAt = entity.PublishedAt });
     }
 
     [HttpDelete("admin/blog/{id:guid}")]
@@ -231,6 +283,10 @@ public class ContentController(
         return NoContent();
     }
 
+    /// <summary>Sanitises an admin-provided release date; anything implausible becomes null.</summary>
+    private static DateTime? ClampedPublishedAt(DateTime? at) =>
+        at is { } d && d.Year is >= 2000 and <= 2100 ? DateTime.SpecifyKind(d, DateTimeKind.Utc) : null;
+
     private static (string Slug, string TitleFa, string TitleEn, string SumFa, string SumEn, string BodyFa, string BodyEn, string? Error) ValidateBlog(UpsertBlogRequest req, bool requireBody)
     {
         var slug = (req.Slug?.Trim() ?? "").ToLowerInvariant();
@@ -238,8 +294,8 @@ public class ContentController(
         var titleEn = req.TitleEn?.Trim() ?? "";
         var sumFa = req.SummaryFa?.Trim() ?? "";
         var sumEn = req.SummaryEn?.Trim() ?? "";
-        var bodyFa = req.BodyFa?.Trim() ?? "";
-        var bodyEn = req.BodyEn?.Trim() ?? "";
+        var bodyFa = SanitizeBlogBody(req.BodyFa?.Trim() ?? "");
+        var bodyEn = SanitizeBlogBody(req.BodyEn?.Trim() ?? "");
 
         if (!System.Text.RegularExpressions.Regex.IsMatch(slug, @"^[a-z0-9]+(?:-[a-z0-9]+)*$") || slug.Length > 120)
             return ("", "", "", "", "", "", "", "نامک (slug) فقط حروف انگلیسی کوچک، عدد و خط تیره.");

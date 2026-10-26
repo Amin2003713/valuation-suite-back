@@ -3,7 +3,9 @@ using MediatR;
 namespace Application.Tools;
 
 /// <summary>Aggregated stats for one metric across a bucket of submissions.</summary>
-public record BenchmarkStat(double Min, double Max, double Avg, int Count);
+/// <remarks>Median/TopQuartile are percentile extras used by the radar's
+/// "strict" comparison series; min/max/avg remain the primary series.</remarks>
+public record BenchmarkStat(double Min, double Max, double Avg, int Count, double Median, double TopQuartile);
 
 /// <summary>
 ///     Benchmark data for the spider-web chart: per-metric min/max/avg within the
