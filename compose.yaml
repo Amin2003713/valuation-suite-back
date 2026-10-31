@@ -52,24 +52,24 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  web:
-    build:
-      context: ../valuation-suite
-      dockerfile: Dockerfile
-      args:
-        # Baked into the browser bundle at build time — must be the URL the
-        # browser can reach, not the internal compose hostname.
-        NEXT_PUBLIC_API_URL: "https://validation.gymgroup.cv"
-        NEXT_PUBLIC_SITE_URL: "https://validation.gymgroup.cv"
-    container_name: valuation-web
-    environment:
-      NODE_ENV: production
-    ports:
-      - "9091:3000"
-    depends_on:
-      api:
-        condition: service_healthy
-    restart: unless-stopped
+#  web:
+#    build:
+#      context: ../valuation-suite
+#      dockerfile: Dockerfile
+#      args:
+#        # Baked into the browser bundle at build time — must be the URL the
+#        # browser can reach, not the internal compose hostname.
+#        NEXT_PUBLIC_API_URL: "https://validation.gymgroup.cv"
+#        NEXT_PUBLIC_SITE_URL: "https://validation.gymgroup.cv"
+#    container_name: valuation-web
+#    environment:
+#      NODE_ENV: production
+#    ports:
+#      - "9091:3000"
+#    depends_on:
+#      api:
+#        condition: service_healthy
+#    restart: unless-stopped
 
 volumes:
   mssql-data:
