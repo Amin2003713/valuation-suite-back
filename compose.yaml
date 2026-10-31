@@ -4,7 +4,8 @@
 # Change the SA password / API URL below if the deployment addresses change.
 #
 # Run from this folder:  docker compose up -d --build
-# Frontend: http://localhost:3000   API: http://localhost:8080  (/swagger, /health)
+# Frontend: http://localhost:9091   API: http://localhost:9090  (/swagger, /health)
+# Behind the reverse proxy: https://validation.gymgroup.cv
 name: valuation-suite
 
 services:
@@ -14,17 +15,17 @@ services:
     environment:
       ACCEPT_EULA: "Y"
       MSSQL_PID: Developer
-      MSSQL_SA_PASSWORD: "VsDocker!Pass2026"
+      MSSQL_SA_PASSWORD: "Iu%7D%3A-%2Bw6eP%5EOY*qhgFtpwRAF"
     volumes:
       - mssql-data:/var/opt/mssql
     # Not published to the host: only the API needs it, on the compose network.
     expose:
-      - "1433"
+      - "5012"
     healthcheck:
       test:
         [
           "CMD-SHELL",
-          "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P 'VsDocker!Pass2026' -Q 'SELECT 1' || exit 1",
+          "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P 'Iu%7D%3A-%2Bw6eP%5EOY*qhgFtpwRAF' -Q 'SELECT 1' || exit 1",
         ]
       interval: 10s
       timeout: 5s
@@ -42,10 +43,10 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       # EF migrations are applied automatically at startup (SQL Server path).
-      ConnectionStrings__AssessmentDb: "Server=db,1433;Database=ValuationSuite;User Id=sa;Password=VsDocker!Pass2026;TrustServerCertificate=True;MultipleActiveResultSets=true;"
+      ConnectionStrings__AssessmentDb: "Server=db,1433;Database=ValuationSuite;User Id=sa;Password=Iu%7D%3A-%2Bw6eP%5EOY*qhgFtpwRAF;TrustServerCertificate=True;MultipleActiveResultSets=true;"
       # Jwt / Zarinpal / AdminBootstrap come from appsettings.json.
     ports:
-      - "8080:8080"
+      - "9090:8080"
     depends_on:
       db:
         condition: service_healthy
@@ -58,13 +59,13 @@ services:
       args:
         # Baked into the browser bundle at build time — must be the URL the
         # browser can reach, not the internal compose hostname.
-        NEXT_PUBLIC_API_URL: "http://localhost:8080"
-        NEXT_PUBLIC_SITE_URL: "http://localhost:3000"
+        NEXT_PUBLIC_API_URL: "https://validation.gymgroup.cv"
+        NEXT_PUBLIC_SITE_URL: "https://validation.gymgroup.cv"
     container_name: valuation-web
     environment:
       NODE_ENV: production
     ports:
-      - "3000:3000"
+      - "9091:3000"
     depends_on:
       api:
         condition: service_healthy
