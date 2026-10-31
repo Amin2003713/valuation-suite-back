@@ -1,10 +1,37 @@
-# Valuation Suite API — Docker profile uses SQLite by default (Database__Provider=Sqlite),
-# so a single container is enough. To run against SQL Server instead, set:
-#   Database__Provider: SqlServer
-#   ConnectionStrings__AssessmentDb: "Server=...;Database=ValuationSuite;User Id=sa;Password=...;TrustServerCertificate=True"
+# Valuation Suite — SQL Server + ASP.NET API + Next.js frontend.
+#
+# All configuration is hardcoded here (private server, no separate env files).
+# Change the SA password / API URL below if the deployment addresses change.
+#
+# Run from this folder:  docker compose up -d --build
+# Frontend: http://localhost:3000   API: http://localhost:8080  (/swagger, /health)
 name: valuation-suite
 
 services:
+  db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: valuation-db
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: Developer
+      MSSQL_SA_PASSWORD: "VsDocker!Pass2026"
+    volumes:
+      - mssql-data:/var/opt/mssql
+    # Not published to the host: only the API needs it, on the compose network.
+    expose:
+      - "1433"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P 'VsDocker!Pass2026' -Q 'SELECT 1' || exit 1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    restart: unless-stopped
+
   api:
     build:
       context: .
@@ -14,15 +41,34 @@ services:
     container_name: valuation-api
     environment:
       ASPNETCORE_ENVIRONMENT: Production
-      # Zarinpal / Jwt / AdminBootstrap come from appsettings.json; override here if needed:
-      # Zarinpal__MerchantId: "..."
-      # Zarinpal__FrontendRedirectUrl: "https://your-frontend/payment/callback"
+      # EF migrations are applied automatically at startup (SQL Server path).
+      ConnectionStrings__AssessmentDb: "Server=db,1433;Database=ValuationSuite;User Id=sa;Password=VsDocker!Pass2026;TrustServerCertificate=True;MultipleActiveResultSets=true;"
+      # Jwt / Zarinpal / AdminBootstrap come from appsettings.json.
     ports:
       - "8080:8080"
-    volumes:
-      # SQLite database file lives here — survives container restarts/redeploys.
-      - sqlite-data:/app/data
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ../valuation-suite
+      dockerfile: Dockerfile
+      args:
+        # Baked into the browser bundle at build time — must be the URL the
+        # browser can reach, not the internal compose hostname.
+        NEXT_PUBLIC_API_URL: "http://localhost:8080"
+        NEXT_PUBLIC_SITE_URL: "http://localhost:3000"
+    container_name: valuation-web
+    environment:
+      NODE_ENV: production
+    ports:
+      - "3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:
-  sqlite-data:
+  mssql-data:

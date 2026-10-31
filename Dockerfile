@@ -17,19 +17,19 @@ RUN dotnet restore valuation-suite.sln
 COPY . .
 RUN dotnet publish Web/Api/Web.csproj -c $BUILD_CONFIGURATION -o /app/publish --no-restore
 
-# ── Stage 2: Runtime (self-contained ASP.NET + SQLite) ──────────────────────
-# No bundled SQL Server: the container is a single API process with a SQLite
-# file database (Database:Provider=Sqlite). Simple to deploy (Back4app, Fly.io,
-# any container host) — data lives in the mounted /app/data volume.
+
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 
 WORKDIR /app
 COPY --from=build /app/publish .
 
-# Non-root user; /app/data is the SQLite volume (writable by the app).
-RUN groupadd --system --gid 1001 appgroup \
+# Non-root runtime user. curl is needed by the HEALTHCHECK below
+# (not present in the aspnet base image).
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --system --gid 1001 appgroup \
     && useradd --system --uid 1001 --gid 1001 appuser \
-    && mkdir -p /app/data \
     && chown -R appuser:appgroup /app
 
 USER appuser
@@ -39,10 +39,7 @@ EXPOSE 8080
 ENV ASPNETCORE_URLS=http://+:8080
 ENV ASPNETCORE_ENVIRONMENT=Production
 ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=false
-# Docker profile: SQLite file database (override with Database__Provider=SqlServer
-# + ConnectionStrings__AssessmentDb to point the same image at SQL Server).
-ENV Database__Provider=Sqlite
-ENV Database__SqlitePath=/app/data/valuationsuite.db
+
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=5 \
     CMD curl -f http://localhost:8080/health || exit 1
