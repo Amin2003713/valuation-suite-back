@@ -25,7 +25,7 @@ public class ZarinpalOptions
     public int ProPlanDurationDays { get; set; } = 30;
 
     /// <summary>Where the gateway redirects the user after payment (frontend route).</summary>
-    public string FrontendRedirectUrl { get; set; } = "http://localhost:3000/payment/callback";
+    public string FrontendRedirectUrl { get; set; } = "https://validation.gymgroup.cv/payment/callback";
 
     public string PaymentGatewayUrl => Sandbox
         ? "https://sandbox.zarinpal.com/pg/v4/payment"
