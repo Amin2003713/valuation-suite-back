@@ -1,0 +1,97 @@
+name: Deploy
+
+# Deploys the API to the private server over SSH (username + password). This
+# repo is synced into
+#   ${DEPLOY_PATH}/valuation-suite-back
+# (the compose file lives here) and `db` + `api` are rebuilt/restarted. The
+# frontend checkout is the sibling folder ${DEPLOY_PATH}/valuation-suite.
+# EF migrations are applied automatically when the API starts.
+#
+# Required repository secrets:
+#   SSH_HOST      server hostname or IP
+#   SSH_USER      SSH user (member of the docker group)
+#   SSH_PASSWORD  password for that user
+#   DEPLOY_PATH   parent folder on the server holding both checkouts,
+#                 e.g. /srv/valuation-suite
+on:
+  push:
+    branches: [ main ]
+    tags: [ "v*" ]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-backend
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy API
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Build
+        run: dotnet build valuation-suite.sln -c Release
+
+      - name: Install sshpass
+        run: |
+          if ! command -v sshpass >/dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y sshpass
+          fi
+
+      - name: Trust server host key
+        env:
+          SSH_HOST: "85.198.52.187"
+        run: |
+          install -m 700 -d ~/.ssh
+          ssh-keyscan -H "$SSH_HOST" >> ~/.ssh/known_hosts
+
+      - name: Sync sources to server
+        env:
+          SSHPASS: "Amin#7Xv!92QpL4"
+          SSH_HOST: "85.198.52.187"
+          SSH_USER: "root"
+          DEPLOY_PATH: "/validation/back"
+        run: |
+          rsync -az \
+            --exclude '.git' \
+            --exclude 'bin' \
+            --exclude 'obj' \
+            --exclude '.env' \
+            --exclude '.env.*' \
+            --exclude '.idea' \
+            --exclude '.freebuff' \
+            --exclude '*.log' \
+            -e "sshpass -e ssh -o StrictHostKeyChecking=yes" \
+            ./ "${SSH_USER}@${SSH_HOST}:${DEPLOY_PATH}/valuation-suite-back/"
+
+      - name: Rebuild and restart db + api
+        env:
+          SSHPASS: "Amin#7Xv!92QpL4"
+          SSH_HOST: "85.198.52.187"
+          SSH_USER: "root"
+          DEPLOY_PATH: "/validation/back"
+        run: |
+          sshpass -e ssh "${SSH_USER}@${SSH_HOST}" \
+            "cd '${DEPLOY_PATH}/valuation-suite-back' && docker compose up -d --build db api"
+
+      - name: Smoke test
+        env:
+          SSHPASS: "Amin#7Xv!92QpL4"
+          SSH_HOST: "85.198.52.187"
+          SSH_USER: "root"
+        run: |
+          for i in $(seq 1 30); do
+            status=$(sshpass -e ssh "${SSH_USER}@${SSH_HOST}" \
+              "docker inspect -f '{{.State.Health.Status}}' valuation-api 2>/dev/null || echo unknown")
+            echo "api health: $status"
+            [ "$status" = "healthy" ] && exit 0
+            sleep 5
+          done
+          exit 1
