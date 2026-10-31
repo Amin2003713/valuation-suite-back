@@ -19,8 +19,8 @@ services:
     volumes:
       - mssql-data:/var/opt/mssql
     # Not published to the host: only the API needs it, on the compose network.
-    expose:
-      - "5012"
+    ports:
+      - "5012:1433"
     healthcheck:
       test:
         [
