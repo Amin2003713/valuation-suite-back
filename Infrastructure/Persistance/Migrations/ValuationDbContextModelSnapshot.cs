@@ -753,6 +753,70 @@ namespace Persistence.Migrations
                     b.ToTable("FooterLinks");
                 });
 
+            modelBuilder.Entity("Domain.Content.SiteText", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("DeletedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("GroupKey")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime?>("ModifiedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("ModifiedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<string>("TextEn")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<string>("TextFa")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<string>("TextKey")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TextKey");
+
+                    b.HasIndex("GroupKey", "SortOrder");
+
+                    b.ToTable("SiteTexts");
+                });
+
             modelBuilder.Entity("Domain.Messaging.ContactMessage", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1264,6 +1328,10 @@ namespace Persistence.Migrations
 
                     b.HasIndex("UserId");
 
+                    b.HasIndex("Industry", "CreatedAt");
+
+                    b.HasIndex("UserId", "CreatedAt");
+
                     b.HasIndex("UserId", "ToolCode");
 
                     b.ToTable("BinomialValuationSubmissions");
@@ -1511,6 +1579,10 @@ namespace Persistence.Migrations
                     b.HasIndex("Industry");
 
                     b.HasIndex("UserId");
+
+                    b.HasIndex("Industry", "CreatedAt");
+
+                    b.HasIndex("UserId", "CreatedAt");
 
                     b.HasIndex("UserId", "ToolCode");
 
@@ -1760,6 +1832,10 @@ namespace Persistence.Migrations
 
                     b.HasIndex("UserId");
 
+                    b.HasIndex("Industry", "CreatedAt");
+
+                    b.HasIndex("UserId", "CreatedAt");
+
                     b.HasIndex("UserId", "ToolCode");
 
                     b.ToTable("DigitalAiReadinessSubmissions");
@@ -2007,6 +2083,10 @@ namespace Persistence.Migrations
                     b.HasIndex("Industry");
 
                     b.HasIndex("UserId");
+
+                    b.HasIndex("Industry", "CreatedAt");
+
+                    b.HasIndex("UserId", "CreatedAt");
 
                     b.HasIndex("UserId", "ToolCode");
 
@@ -2256,6 +2336,10 @@ namespace Persistence.Migrations
 
                     b.HasIndex("UserId");
 
+                    b.HasIndex("Industry", "CreatedAt");
+
+                    b.HasIndex("UserId", "CreatedAt");
+
                     b.HasIndex("UserId", "ToolCode");
 
                     b.ToTable("IconScorecardSubmissions");
@@ -2503,6 +2587,10 @@ namespace Persistence.Migrations
                     b.HasIndex("Industry");
 
                     b.HasIndex("UserId");
+
+                    b.HasIndex("Industry", "CreatedAt");
+
+                    b.HasIndex("UserId", "CreatedAt");
 
                     b.HasIndex("UserId", "ToolCode");
 
@@ -2752,6 +2840,10 @@ namespace Persistence.Migrations
 
                     b.HasIndex("UserId");
 
+                    b.HasIndex("Industry", "CreatedAt");
+
+                    b.HasIndex("UserId", "CreatedAt");
+
                     b.HasIndex("UserId", "ToolCode");
 
                     b.ToTable("InnovationReadinessSubmissions");
@@ -2999,6 +3091,10 @@ namespace Persistence.Migrations
                     b.HasIndex("Industry");
 
                     b.HasIndex("UserId");
+
+                    b.HasIndex("Industry", "CreatedAt");
+
+                    b.HasIndex("UserId", "CreatedAt");
 
                     b.HasIndex("UserId", "ToolCode");
 
@@ -3248,6 +3344,10 @@ namespace Persistence.Migrations
 
                     b.HasIndex("UserId");
 
+                    b.HasIndex("Industry", "CreatedAt");
+
+                    b.HasIndex("UserId", "CreatedAt");
+
                     b.HasIndex("UserId", "ToolCode");
 
                     b.ToTable("IpAuditSubmissions");
@@ -3495,6 +3595,10 @@ namespace Persistence.Migrations
                     b.HasIndex("Industry");
 
                     b.HasIndex("UserId");
+
+                    b.HasIndex("Industry", "CreatedAt");
+
+                    b.HasIndex("UserId", "CreatedAt");
 
                     b.HasIndex("UserId", "ToolCode");
 
@@ -3744,6 +3848,10 @@ namespace Persistence.Migrations
 
                     b.HasIndex("UserId");
 
+                    b.HasIndex("Industry", "CreatedAt");
+
+                    b.HasIndex("UserId", "CreatedAt");
+
                     b.HasIndex("UserId", "ToolCode");
 
                     b.ToTable("JobEvaluationSubmissions");
@@ -3991,6 +4099,10 @@ namespace Persistence.Migrations
                     b.HasIndex("Industry");
 
                     b.HasIndex("UserId");
+
+                    b.HasIndex("Industry", "CreatedAt");
+
+                    b.HasIndex("UserId", "CreatedAt");
 
                     b.HasIndex("UserId", "ToolCode");
 
@@ -4240,6 +4352,10 @@ namespace Persistence.Migrations
 
                     b.HasIndex("UserId");
 
+                    b.HasIndex("Industry", "CreatedAt");
+
+                    b.HasIndex("UserId", "CreatedAt");
+
                     b.HasIndex("UserId", "ToolCode");
 
                     b.ToTable("MaturityAssessmentSubmissions");
@@ -4487,6 +4603,10 @@ namespace Persistence.Migrations
                     b.HasIndex("Industry");
 
                     b.HasIndex("UserId");
+
+                    b.HasIndex("Industry", "CreatedAt");
+
+                    b.HasIndex("UserId", "CreatedAt");
 
                     b.HasIndex("UserId", "ToolCode");
 
@@ -4736,6 +4856,10 @@ namespace Persistence.Migrations
 
                     b.HasIndex("UserId");
 
+                    b.HasIndex("Industry", "CreatedAt");
+
+                    b.HasIndex("UserId", "CreatedAt");
+
                     b.HasIndex("UserId", "ToolCode");
 
                     b.ToTable("PatentValueIndexSubmissions");
@@ -4983,6 +5107,10 @@ namespace Persistence.Migrations
                     b.HasIndex("Industry");
 
                     b.HasIndex("UserId");
+
+                    b.HasIndex("Industry", "CreatedAt");
+
+                    b.HasIndex("UserId", "CreatedAt");
 
                     b.HasIndex("UserId", "ToolCode");
 
@@ -5232,6 +5360,10 @@ namespace Persistence.Migrations
 
                     b.HasIndex("UserId");
 
+                    b.HasIndex("Industry", "CreatedAt");
+
+                    b.HasIndex("UserId", "CreatedAt");
+
                     b.HasIndex("UserId", "ToolCode");
 
                     b.ToTable("RnpvCalculatorSubmissions");
@@ -5479,6 +5611,10 @@ namespace Persistence.Migrations
                     b.HasIndex("Industry");
 
                     b.HasIndex("UserId");
+
+                    b.HasIndex("Industry", "CreatedAt");
+
+                    b.HasIndex("UserId", "CreatedAt");
 
                     b.HasIndex("UserId", "ToolCode");
 
@@ -5728,6 +5864,10 @@ namespace Persistence.Migrations
 
                     b.HasIndex("UserId");
 
+                    b.HasIndex("Industry", "CreatedAt");
+
+                    b.HasIndex("UserId", "CreatedAt");
+
                     b.HasIndex("UserId", "ToolCode");
 
                     b.ToTable("StartupAssessmentSubmissions");
@@ -5975,6 +6115,10 @@ namespace Persistence.Migrations
                     b.HasIndex("Industry");
 
                     b.HasIndex("UserId");
+
+                    b.HasIndex("Industry", "CreatedAt");
+
+                    b.HasIndex("UserId", "CreatedAt");
 
                     b.HasIndex("UserId", "ToolCode");
 
@@ -6527,6 +6671,10 @@ namespace Persistence.Migrations
 
                     b.HasIndex("UserId");
 
+                    b.HasIndex("Industry", "CreatedAt");
+
+                    b.HasIndex("UserId", "CreatedAt");
+
                     b.HasIndex("UserId", "ToolCode");
 
                     b.ToTable("TrademarkValuationSubmissions");
@@ -6774,6 +6922,10 @@ namespace Persistence.Migrations
                     b.HasIndex("Industry");
 
                     b.HasIndex("UserId");
+
+                    b.HasIndex("Industry", "CreatedAt");
+
+                    b.HasIndex("UserId", "CreatedAt");
 
                     b.HasIndex("UserId", "ToolCode");
 

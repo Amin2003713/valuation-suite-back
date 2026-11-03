@@ -5,6 +5,7 @@ using Application.Tools;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Caching.Memory;
 using Web.Api.Services;
 
 namespace Web.Api.Controllers;
@@ -15,18 +16,40 @@ namespace Web.Api.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/tools")]
-public class ToolsController(IMediator mediator, ICurrentUserAccessor currentUser) : ControllerBase
+public class ToolsController(
+    IMediator mediator,
+    ICurrentUserAccessor currentUser,
+    IMemoryCache cache) : ControllerBase
 {
+    /// <summary>
+    ///     How long a public catalogue/form payload is reused in-process. The
+    ///     forms are identical for every anonymous caller in the same language,
+    ///     so this removes a full query (plus localization joins) per page view.
+    /// </summary>
+    private static readonly TimeSpan PublicCacheTtl = TimeSpan.FromSeconds(60);
+
+    /// <summary>Cache key includes the language because translations are payload.</summary>
+    private string CacheKey(string suffix) =>
+        $"tools:{suffix}:{Request.Query["lang"]}:{Request.Headers.AcceptLanguage}";
+
     /// <summary>List of registered tools (for building menus).</summary>
     [HttpGet]
     [AllowAnonymous]
     public async Task<IActionResult> List(CancellationToken ct)
     {
-        // Public, changes only when staff edit tool metadata: let the browser
-        // and any CDN hold it briefly instead of refetching on every mount.
-        Response.Headers.CacheControl = "public, max-age=60";
+        // Public, changes only when staff edit tool metadata: let the browser,
+        // any CDN and the process itself hold it instead of refetching.
+        Response.Headers.CacheControl = "public, max-age=300";
         Response.Headers.Vary = "Accept-Language";
-        return Ok(await mediator.Send(new GetToolFormsQuery(), ct));
+
+        var key = CacheKey("list");
+        if (!cache.TryGetValue(key, out var payload))
+        {
+            payload = await mediator.Send(new GetToolFormsQuery(), ct);
+            cache.Set(key, payload, PublicCacheTtl);
+        }
+
+        return Ok(payload);
     }
 
     /// <summary>Form definition (defaults, labels, reference data) for one tool.</summary>
@@ -34,10 +57,18 @@ public class ToolsController(IMediator mediator, ICurrentUserAccessor currentUse
     [AllowAnonymous]
     public async Task<IActionResult> Form(string toolCode, CancellationToken ct)
     {
-        // Cache key is the full URL, so ?lang= keeps the languages apart.
-        Response.Headers.CacheControl = "public, max-age=60";
+        // Cache key is language-aware, so ?lang= keeps the translations apart.
+        Response.Headers.CacheControl = "public, max-age=300";
         Response.Headers.Vary = "Accept-Language";
-        return Ok(await mediator.Send(new GetToolFormQuery { ToolCode = toolCode }, ct));
+
+        var key = CacheKey($"form:{toolCode.ToUpperInvariant()}");
+        if (!cache.TryGetValue(key, out var payload))
+        {
+            payload = await mediator.Send(new GetToolFormQuery { ToolCode = toolCode }, ct);
+            cache.Set(key, payload, PublicCacheTtl);
+        }
+
+        return Ok(payload);
     }
 
     /// <summary>

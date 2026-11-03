@@ -1,73 +1,45 @@
 using Application.Admin;
 using Application.Interfaces;
 using Application.Interfaces.Base;
+using Application.Messaging;
 using Common.Exceptions;
 using Domain.Messaging;
+using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Web.Api.Services;
 
 namespace Web.Api.Controllers;
 
 /// <summary>
 ///     Public contact + newsletter endpoints, plus their admin management APIs.
-///     Strictly additive: touches nothing in payments, pricing or tool logic.
+///
+///     The public actions contain no rules any more: validation, the honeypot,
+///     consent and phishing screening live in
+///     <see cref="RequestHandlers.Messaging.SubmitContactMessageHandler" /> and
+///     <see cref="RequestHandlers.Messaging.SubscribeNewsletterHandler" />.
 /// </summary>
 [ApiController]
 [Route("api/messaging")]
 public class MessagingController(
+    IMediator mediator,
     ICommandRepository<ContactMessage> contactCommands,
     IQueryRepository<ContactMessage> contactQueries,
     ICommandRepository<NewsletterSubscriber> subscribersCommands,
     IQueryRepository<NewsletterSubscriber> subscribersQueries) : ControllerBase
 {
-    public record SubmitContactRequest(string Name, string Email, string? Subject, string Message, bool Consent);
+    public record ContactFormRequest(string? Name, string? Email, string? Subject, string? Message, bool Consent, string? Website = null);
 
-    /// <summary>
-    ///     Public contact endpoint (no signup required). A hidden "website"
-    ///     field (honeypot) marks obvious bots as spam instead of persisting
-    ///     them into the team's inbox queue.
-    /// </summary>
+    /// <summary>Public contact endpoint (no signup required).</summary>
     [HttpPost("contact")]
     [AllowAnonymous]
     public async Task<IActionResult> SubmitContact([FromBody] ContactFormRequest request, CancellationToken ct)
     {
-        var name = request.Name?.Trim() ?? string.Empty;
-        var email = request.Email?.Trim() ?? string.Empty;
-        var message = request.Message?.Trim() ?? string.Empty;
-
-        if (name.Length is < 2 or > 120)
-            throw new ValuationException("نام را کامل وارد کنید.");
-        if (!IsValidEmail(email))
-            throw new ValuationException("ایمیل معتبر وارد کنید.");
-        if (message.Length is < 10 or > 4000)
-            throw new ValuationException("متن پیام باید بین ۱۰ تا ۴۰۰۰ نویسه باشد.");
-        if (!request.Consent)
-            throw new ValuationException("برای ارسال پیام باید با حفظ اطلاعات ملاحظه کنید.");
-
-        // Honeypot: real users never render "Website" (it is visually hidden for AT
-        // too); anything typed there is treated as spam but recorded for the filter.
-        var isSpam = !string.IsNullOrWhiteSpace(request.Website);
-
-        var entity = new ContactMessage
-        {
-            Name = name,
-            Email = email,
-            Subject = string.IsNullOrWhiteSpace(request.Subject) ? null : request.Subject.Trim(),
-            Message = message,
-            ConsentGiven = true,
-            IsSpam = isSpam,
-            Status = isSpam ? ContactMessageStatus.Spam : ContactMessageStatus.New,
-        };
-
-        contactCommands.Add(entity, saveNow: false);
-        await contactCommands.SaveChangesAsync(ct);
-
-        return Ok(new { id = entity.Id });
+        var id = await mediator.Send(
+            new SubmitContactMessageCommand(request.Name, request.Email, request.Subject, request.Message, request.Consent, request.Website),
+            ct);
+        return Ok(new { id });
     }
-
-    public record ContactFormRequest(string? Name, string? Email, string? Subject, string? Message, bool Consent, string? Website = null);
 
     public record SubscribeNewsletterRequest(string Email, bool Consent, string? Source = null);
 
@@ -76,33 +48,7 @@ public class MessagingController(
     [AllowAnonymous]
     public async Task<IActionResult> SubscribeNewsletter([FromBody] SubscribeNewsletterRequest request, CancellationToken ct)
     {
-        var email = request.Email?.Trim() ?? string.Empty;
-        if (!IsValidEmail(email))
-            throw new ValuationException("ایمیل معتبر وارد کنید.");
-        if (!request.Consent)
-            throw new ValuationException("برای عضویت در خبرنامه باید با حفظ اطلاعات ملاحظه کنید.");
-
-        var emailKey = email.ToLowerInvariant();
-
-        var existing = await subscribersCommands.Table
-            .FirstOrDefaultAsync(s => s.EmailKey == emailKey, ct);
-
-        if (existing is null)
-        {
-            subscribersCommands.Add(new NewsletterSubscriber
-            {
-                Email = email,
-                EmailKey = emailKey,
-                Source = string.IsNullOrWhiteSpace(request.Source) ? "footer" : request.Source.Trim(),
-                ConsentGiven = true,
-            }, saveNow: false);
-        }
-        else
-        {
-            existing.Resubscribe();
-        }
-
-        await subscribersCommands.SaveChangesAsync(ct);
+        await mediator.Send(new SubscribeNewsletterCommand(request.Email, request.Consent, request.Source), ct);
         return Ok(new { subscribed = true });
     }
 
@@ -210,8 +156,4 @@ public class MessagingController(
         await subscribersCommands.SaveChangesAsync(ct);
         return Ok(new { id = entity.Id, isActive = false });
     }
-
-    private static bool IsValidEmail(string email) =>
-        // Minimal sanity — full validation is the sender's concern.
-        email.Length is > 3 and <= 254 && email.Contains('@') && !email.Contains(' ');
 }

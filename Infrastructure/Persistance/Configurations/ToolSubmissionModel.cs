@@ -47,6 +47,12 @@ public static class ToolSubmissionModel
         // Industry benchmark (spider-web radar) aggregates filter by industry.
         builder.HasIndex(nameof(ToolSubmissionBase.Industry));
 
+        // Hot read paths: "my recent runs" and "latest runs in my industry"
+        // both filter on the first column and sort by the second, so composite
+        // indexes let SQL Server range-scan instead of sorting the whole table.
+        builder.HasIndex(nameof(ToolSubmissionBase.Industry), nameof(ToolSubmissionBase.CreatedAt));
+        builder.HasIndex(nameof(ToolSubmissionBase.UserId), nameof(ToolSubmissionBase.CreatedAt));
+
         builder.HasOne(typeof(ApplicationUser))
             .WithMany()
             .HasForeignKey(nameof(ToolSubmissionBase.UserId))

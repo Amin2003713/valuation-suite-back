@@ -239,16 +239,25 @@ public class AdminQueryRepository(ReadOnlyDbContext dbContext) : IAdminQueryRepo
             .Select(r => new PlanSlice(r.Plan.ToString(), r.Count))
             .ToList();
 
-        // Score distribution across all submissions (buckets of 10, grouped in SQL).
-        var scoreRows = await ToolSubmissionQuery.All(Db)
+        // Score distribution across all submissions (buckets of 10).
+        //
+        // The bucketing is deliberately done in memory, not in SQL. A legacy row
+        // whose stored score is a raw currency figure (e.g. 31,348,702,117.02)
+        // made the SQL-side CAST to int overflow and failed this whole endpoint
+        // with HTTP 500 — the number in the error report. Only the score column is
+        // read, and anything outside 0–100 / NaN / Infinity is discarded as corrupt
+        // before a cast can happen, so no stored value can break the dashboard.
+        var scoreValues = await ToolSubmissionQuery.All(Db)
             .Where(s => s.OverallScore != null)
-            .GroupBy(s => (int)(s.OverallScore!.Value / 10))
-            .Select(g => new { Bucket = g.Key, Count = g.Count() })
+            .Select(s => s.OverallScore!.Value)
             .ToListAsync(ct);
-        var scoreDistribution = scoreRows
-            .GroupBy(x => Math.Clamp(x.Bucket, 0, 9))
+
+        var scoreDistribution = scoreValues
+            .Select(v => (double)v)
+            .Where(v => double.IsFinite(v) && v is >= 0 and <= 100)
+            .GroupBy(v => (int)(v / 10))
             .OrderBy(g => g.Key)
-            .Select(g => new ScoreBucket($"{g.Key * 10}-{g.Key * 10 + 9}", (long)g.Sum(x => x.Count)))
+            .Select(g => new ScoreBucket($"{g.Key * 10}-{g.Key * 10 + 9}", (long)g.Count()))
             .ToList();
 
         // Revenue per day (paid payments only) — grouped fully in SQL.

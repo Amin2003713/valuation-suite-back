@@ -66,9 +66,17 @@ public class Program
             });
         });
 
+        // In-process cache for public, rarely-changing payloads (tool catalogue
+        // and per-tool forms). Short TTLs: staff edits show up within a minute.
+        builder.Services.AddMemoryCache();
+
         builder.Services.AddApplication();
         builder.Services.AddPersistence(builder.Configuration);
         builder.Services.AddHandlers();
+
+        // Handlers that need web-only services (UserManager, JWT token issuance)
+        // live in this assembly and are discovered separately.
+        builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(Program).Assembly));
 
         // Tool reference tables, bands and thresholds for the math engines.
         // Defaults live in code; any "Tools:*" appsettings section can override them.
@@ -148,6 +156,10 @@ public class Program
                 c.DefaultModelRendering(Swashbuckle.AspNetCore.SwaggerUI.ModelRendering.Example);
             });
         }
+
+        // Security headers, scanner rejection and per-IP rate limits run before
+        // anything touches the database or a handler.
+        app.UseMiddleware<Web.Api.Middleware.AbuseProtectionMiddleware>();
 
         app.UseHttpsRedirection();
 
