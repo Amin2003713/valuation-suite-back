@@ -93,6 +93,7 @@ public sealed class GetToolFormsQueryHandler(
         /* One extra query for every tool-level localization row of the served
          * language (QuestionId == "" — the tool info row of each tool's table). */
         var infoByTool = (await localizations.All
+                .AsNoTracking()
                 .Where(l => l.QuestionId == ToolLocalizationBase.ToolLevelQuestionId && l.Language == lang)
                 .ToListAsync(ct))
             .ToDictionary(l => l.ToolCode, StringComparer.OrdinalIgnoreCase);
@@ -128,7 +129,9 @@ public sealed class GetToolSubmissionsQueryHandler(
             : submissions.ByTool(request.ToolCode);
         var query = baseQuery.Where(s => s.UserId == userId);
 
+        // Read-only projection — skip the change tracker entirely.
         var rows = await query
+            .AsNoTracking()
             .OrderByDescending(s => s.CreatedAt)
             .Take(50)
             .ToListAsync(ct);

@@ -18,6 +18,19 @@ public static class DependencyInjection
         services.AddProblemDetails();
         services.AddEndpointsApiExplorer();
 
+        /* JSON responses here are large (tool forms, submissions, benchmarks)
+         * and compress very well. Brotli/Gzip are the default providers; the
+         * only change is enabling it over HTTPS too, which the framework
+         * switches off by default for the BREACH-era rationale. These payloads
+         * contain no secrets tied to a session cookie (auth is a bearer
+         * header), so the trade-off is safe. */
+        services.AddResponseCompression(options =>
+        {
+            options.EnableForHttps = true;
+            options.MimeTypes = Microsoft.AspNetCore.ResponseCompression.ResponseCompressionDefaults.MimeTypes
+                .Concat(new[] { "application/json", "application/problem+json" });
+        });
+
         services.AddCors(options => options.AddDefaultPolicy(policy =>
             policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
 
@@ -27,6 +40,7 @@ public static class DependencyInjection
     public static WebApplication UseWebApi(this WebApplication app)
     {
         app.UseExceptionHandler();
+        app.UseResponseCompression();
 
         /* CORS must be registered BEFORE authentication. The JWT middleware
          * short-circuits 401/403 responses; anything the auth middleware emits

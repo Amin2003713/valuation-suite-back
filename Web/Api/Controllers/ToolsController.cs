@@ -21,13 +21,24 @@ public class ToolsController(IMediator mediator, ICurrentUserAccessor currentUse
     [HttpGet]
     [AllowAnonymous]
     public async Task<IActionResult> List(CancellationToken ct)
-        => Ok(await mediator.Send(new GetToolFormsQuery(), ct));
+    {
+        // Public, changes only when staff edit tool metadata: let the browser
+        // and any CDN hold it briefly instead of refetching on every mount.
+        Response.Headers.CacheControl = "public, max-age=60";
+        Response.Headers.Vary = "Accept-Language";
+        return Ok(await mediator.Send(new GetToolFormsQuery(), ct));
+    }
 
     /// <summary>Form definition (defaults, labels, reference data) for one tool.</summary>
     [HttpGet("{toolCode}/form")]
     [AllowAnonymous]
     public async Task<IActionResult> Form(string toolCode, CancellationToken ct)
-        => Ok(await mediator.Send(new GetToolFormQuery { ToolCode = toolCode }, ct));
+    {
+        // Cache key is the full URL, so ?lang= keeps the languages apart.
+        Response.Headers.CacheControl = "public, max-age=60";
+        Response.Headers.Vary = "Accept-Language";
+        return Ok(await mediator.Send(new GetToolFormQuery { ToolCode = toolCode }, ct));
+    }
 
     /// <summary>
     ///     Runs a tool: the backend computes the result. Pass <c>?persist=false</c>
