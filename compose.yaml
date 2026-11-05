@@ -20,7 +20,7 @@ services:
       - mssql-data:/var/opt/mssql
     # Not published to the host: only the API needs it, on the compose network.
     ports:
-      - "5012:1433"
+      - "5015:1433"
     healthcheck:
       test:
         [
