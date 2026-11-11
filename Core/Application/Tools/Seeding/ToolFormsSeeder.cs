@@ -14,6 +14,9 @@ public interface IToolFormsDbContext
 
     /// <summary>Adds a runtime-typed entity (per-tool question/localization/submission rows).</summary>
     void AddEntity(object entity);
+
+    /// <summary>Removes a runtime-typed entity (retired seed content).</summary>
+    void RemoveEntity(object entity);
 }
 
 /// <summary>
@@ -94,7 +97,7 @@ public static class ToolFormsSeeder
     public static readonly Dictionary<string, (string Title, string? Description)> English = new()
     {
         ["IDEA-ASSESS"] = ("Idea Assessment", "Business idea potential assessment in 5 sections"),
-        ["INNOV-READ"] = ("KTH Innovation Readiness", "Innovation readiness assessment across 9 dimensions"),
+        ["INNOV-READ"] = ("KTH Innovation Readiness", "Innovation readiness assessment: 9 readiness levels, 3 questions each"),
         ["IP-AUDIT"] = ("IP Audit", "Register your IP assets and compute their risk"),
         ["JOB-EVAL"] = ("Job Values Assessment", "Discover your core work values and the right job"),
         ["WIPO-DIAG"] = ("WIPO Diagnostics", "Intellectual property health check (WIPO)"),
@@ -180,7 +183,7 @@ public static class ToolFormsSeeder
                 maxTotal = 135,
             }), 1),
 
-        ("INNOV-READ", "KTH Innovation Readiness", "سنجش آمادگی نوآوری در ۹ بعد", ToolKind.Assessment,
+        ("INNOV-READ", "KTH Innovation Readiness", "سنجش آمادگی نوآوری در ۹ سطح (۲۷ پرسش)", ToolKind.Assessment,
             Json(new
             {
                 indicators = new object[]
@@ -195,7 +198,8 @@ public static class ToolFormsSeeder
                     new { key = "scrl", code = "SCRL", color = "#ca8a04", title = "آمادگی اجتماعی" },
                     new { key = "srl", code = "SRL", color = "#0f766e", title = "آمادگی پایداری" },
                 },
-                scale = 10,
+                scale = 9,
+                questionsPerLevel = 3,
             }), 2),
 
         ("IP-AUDIT", "بازرسی مالکیت فکری (IP Audit)", "ثبت دارایی‌های IP و محاسبه ریسک", ToolKind.Assessment,

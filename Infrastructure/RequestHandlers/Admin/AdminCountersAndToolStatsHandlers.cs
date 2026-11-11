@@ -217,7 +217,10 @@ public sealed class GetAdminToolStatsQueryHandler(IToolSubmissionQueries submiss
                     if (s.ValueKind != JsonValueKind.Object) continue;
                     var key = s.TryGetProperty("key", out var k) && k.ValueKind == JsonValueKind.String ? k.GetString() : null;
                     if (key is null) continue;
-                    if (s.TryGetProperty("score", out var v) && v.ValueKind == JsonValueKind.Number && v.TryGetDouble(out var d) && d >= 0 && d <= 10)
+                    // Explicit 0–100 "percent" wins over the 0–10 level score.
+                    if (s.TryGetProperty("percent", out var pv) && pv.ValueKind == JsonValueKind.Number && pv.TryGetDouble(out var pd) && pd >= 0 && pd <= 100)
+                        list.Add((key, pd));
+                    else if (s.TryGetProperty("score", out var v) && v.ValueKind == JsonValueKind.Number && v.TryGetDouble(out var d) && d >= 0 && d <= 10)
                         list.Add((key, d * 10));
                 }
             }

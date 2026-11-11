@@ -15,6 +15,9 @@ public class SeedingDbContext(WriteOnlyDbContext writeDb) : ISeedingDbContext, I
     public void AddEntity(object entity)
         => writeDb.Add(entity);
 
+    public void RemoveEntity(object entity)
+        => writeDb.Remove(entity);
+
     public Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
         => writeDb.SaveChangesAsync(cancellationToken);
 }

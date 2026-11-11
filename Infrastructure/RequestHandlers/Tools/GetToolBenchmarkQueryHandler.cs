@@ -173,15 +173,21 @@ public sealed class GetToolBenchmarkQueryHandler(
                 }
                 else if (root.TryGetProperty("indicators", out var indicators) && indicators.ValueKind == JsonValueKind.Array)
                 {
-                    // INNOV-READ stores indicator scores 0–10; the benchmark scale
-                    // is 0–100 (same ×10 the chart page applies), so normalize
-                    // when the whole set sits in the 0–10 range.
+                    // Indicators may carry an explicit 0–100 "percent" next to a
+                    // 0–10 (or 1–9, INNOV-READ) level score; the 0–10 scores are
+                    // scaled by ×10 when the whole set sits in that range.
                     var raw = new Dictionary<string, double>();
                     foreach (var s in indicators.EnumerateArray())
                     {
                         if (s.ValueKind != JsonValueKind.Object) continue;
                         var key = s.TryGetProperty("key", out var k) && k.ValueKind == JsonValueKind.String ? k.GetString() : null;
                         if (key is null) continue;
+                        if (s.TryGetProperty("percent", out var pctEl) && pctEl.ValueKind == JsonValueKind.Number
+                            && pctEl.TryGetDouble(out var pct) && pct >= 0 && pct <= 100)
+                        {
+                            metrics[key] = pct;
+                            continue;
+                        }
                         var score = ReadScore(s, max: 10);
                         if (score is { } v) raw[key] = v;
                     }
