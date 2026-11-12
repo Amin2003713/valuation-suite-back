@@ -11,8 +11,12 @@ namespace Application.Tools.Runners;
  *
  *   optionLevel = 1 + (value − 1) × 8 / (options − 1)   → evenly spaced band
  *   levelScore  = round(mean of the answered optionLevels)  → 1..9
- *   average     = round(mean of the level scores, 1)        → 1..9
- *   percent     = average / 9 × 100                          → 0..100 (OverallScore)
+ *   average     = round(mean of the level scores, 1)        → 1..9  (display)
+ *   percent     = mean of the level scores / 9 × 100        → 0..100 (OverallScore)
+ *
+ * The percent is derived from the *unrounded* mean of the level scores, so it
+ * equals the average of the per-level percents instead of being inflated by the
+ * 1-decimal rounding of `average` (4.5556 → 50.6, not 4.6 → 51.1).
  *
  * Status per level (≤3 weak · ≤6 medium · else strong), the overall level
  * text and the strongest/weakest dimensions are computed here; the client
@@ -74,8 +78,9 @@ public sealed class InnovationReadinessRunner : IToolRunner
             indicators.Add(new InnoIndicatorScore(level.Key, score, PercentOf(score), StatusOf(score, loc)));
         }
 
-        var average = indicators.Count > 0 ? Math.Round(indicators.Average(x => x.Score), 1) : 0;
-        var percent = Math.Round(average / 9 * 100, 1);
+        var meanScore = indicators.Count > 0 ? indicators.Average(x => x.Score) : 0;
+        var average = Math.Round(meanScore, 1);
+        var percent = Math.Round(meanScore / 9 * 100, 1);
 
         var levelText = average switch
         {
