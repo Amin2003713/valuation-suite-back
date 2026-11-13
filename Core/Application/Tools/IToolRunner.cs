@@ -58,8 +58,21 @@ public static class ToolInput
     };
 
     public static T Bind<T>(JsonElement input) where T : class
-        => input.Deserialize<T>(ReadOptions)
-           ?? throw ValuationException.BadRequest("ورودی ارسال‌شده نامعتبر است.");
+    {
+        try
+        {
+            return input.Deserialize<T>(ReadOptions)
+                   ?? throw ValuationException.BadRequest("ورودی ارسال‌شده نامعتبر است.");
+        }
+        catch (JsonException)
+        {
+            /* A value that does not fit the input model (wrong type, a number
+             * outside int range, malformed JSON) is the caller's error, not a
+             * server fault — answer 400 instead of letting it surface as 500. */
+            throw ValuationException.BadRequest(
+                "ورودی ارسال‌شده نامعتبر است. (INVALID_INPUT)");
+        }
+    }
 
     public static JsonElement ToJsonElement<T>(T value) where T : class
         => JsonSerializer.SerializeToElement(value, WriteOptions);

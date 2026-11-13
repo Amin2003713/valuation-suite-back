@@ -35,10 +35,13 @@ public sealed class IntangibleAssetsRunner : IToolRunner
         var capBase = c.Spend * c.CapRate;
         var combinedProb = c.PTech * c.PComm;
         var value = capBase * combinedProb;
-        var annualAmort = value / c.Life;
+        var annualAmort = c.Life > 0 ? value / c.Life : 0;
+        // The schedule is a display table: cap the row count so an absurd life
+        // (e.g. a mistyped 100000) cannot make one request allocate thousands of rows.
+        var scheduleYears = Math.Clamp((int)c.Life, 0, 100);
         var rows = new List<RdYearRow>();
         double opening = value;
-        for (var y = 1; y <= (int)c.Life; y++)
+        for (var y = 1; y <= scheduleYears; y++)
         {
             var closing = opening - annualAmort;
             rows.Add(new RdYearRow(y, opening, annualAmort, closing));
@@ -53,12 +56,12 @@ public sealed class IntangibleAssetsRunner : IToolRunner
         var ls = FinanceMath.GrowingAnnuityPV(totalPayroll, c.Growth, c.DiscRate, c.RemainYears);
         var rc = c.NumEmp * (c.RecruitCost + c.TrainCost + c.ProdLossCost);
         var oc = c.AnnualProfit * (c.MonthsToReplace / 12.0);
-        var effRatio = c.FirmRoa / c.IndRoa;
+        var effRatio = c.IndRoa != 0 ? c.FirmRoa / c.IndRoa : 0;
         var herm = FinanceMath.OrdinaryAnnuityPV(totalPayroll * effRatio, c.DiscRate, c.RemainYears);
-        var hcRoi = (c.Revenue - (c.Opex - totalPayroll)) / totalPayroll;
+        var hcRoi = totalPayroll != 0 ? (c.Revenue - (c.Opex - totalPayroll)) / totalPayroll : 0;
         var values = new[] { ls, rc, oc, herm };
         var wsum = c.Weights.Sum();
-        var blended = values.Select((v, i) => v * c.Weights[i]).Sum() / wsum;
+        var blended = Blend(values, c.Weights);
         return new HcResult(totalPayroll, ls, rc, oc, effRatio, herm, hcRoi, wsum, blended);
     }
 
@@ -92,15 +95,29 @@ public sealed class IntangibleAssetsRunner : IToolRunner
         var rfrAdj = rfrRaw * qualityFactor;
         var values = new[] { costAdj, incomeAdj, marketAdj, rfrAdj };
         var wsum = c.Weights.Sum();
-        var preRisk = values.Select((v, i) => v * c.Weights[i]).Sum() / wsum;
+        var preRisk = Blend(values, c.Weights);
         var value = preRisk * (1 - riskDiscount);
         return new DataResult(costRaw, costAdj, incomeRaw, incomeAdj, marketRaw, marketAdj, rfrAnnuity, rfrRaw, rfrAdj, wsum, preRisk, value);
     }
 
+    /// <summary>
+    ///     Weighted average of the method values. A missing/empty weight list falls
+    ///     back to equal weights and a zero weight sum yields 0 instead of throwing
+    ///     (an IndexOutOfRange/NaN used to escape as a 500 on partial/old inputs).
+    /// </summary>
+    private static double Blend(double[] values, List<double> weights)
+    {
+        var wsum = weights.Sum();
+        if (weights.Count == values.Length && wsum > 0)
+            return values.Select((v, i) => v * weights[i]).Sum() / wsum;
+        return values.Length > 0 ? values.Average() : 0;
+    }
+
     private static McResult ComputeMonteCarlo(McInput m, double baseBenefit, double qualityFactorBase)
     {
-        var values = new double[m.N];
-        for (var i = 0; i < m.N; i++)
+        var n = Math.Clamp(m.N, 1, 20_000);
+        var values = new double[n];
+        for (var i = 0; i < n; i++)
         {
             var g = FinanceMath.Triangular(m.GrowthLow, m.GrowthMode, m.GrowthHigh);
             var life = FinanceMath.Triangular(m.LifeLow, m.LifeMode, m.LifeHigh);

@@ -154,6 +154,11 @@ public sealed class PatentValuationRunner : IToolRunner
     private static BsResult ComputeBlackScholes(PatentInput s)
     {
         double S0 = s.OptionS, k = s.OptionK, sig = s.Volatility, r = s.RiskFreeRate, t = s.OptionHorizon;
+        // Degenerate inputs (no volatility / no horizon / strike 0) have no d1/d2:
+        // the call is then worth its intrinsic value, not NaN/Infinity.
+        if (sig <= 0 || t <= 0 || k <= 0 || S0 <= 0)
+            return new BsResult(double.NaN, double.NaN, S0 > k ? 1 : 0, S0 > k ? 1 : 0,
+                Math.Max(S0 - k, 0));
         var d1 = (Math.Log(S0 / k) + (r + sig * sig / 2) * t) / (sig * Math.Sqrt(t));
         var d2 = d1 - sig * Math.Sqrt(t);
         var nd1 = FinanceMath.NormSDist(d1);
@@ -164,7 +169,10 @@ public sealed class PatentValuationRunner : IToolRunner
     private static BinomialResult ComputeBinomial(PatentInput s)
     {
         double S0 = s.OptionS, k = s.OptionK, sig = s.Volatility, r = s.RiskFreeRate, t = s.OptionHorizon;
-        double q = s.Obsolescence, n = s.BinomialSteps;
+        /* Steps come from the client as a number: clamp before allocating the
+         * tree so 0 / negative / huge values cannot throw (NaN, OverflowException,
+         * out-of-range array dimensions). */
+        double q = s.Obsolescence, n = Math.Clamp(Math.Round(s.BinomialSteps), 1, 200);
         var dt = t / n;
         var u = Math.Exp(sig * Math.Sqrt(dt));
         var d = 1 / u;

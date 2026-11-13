@@ -106,8 +106,9 @@ public sealed class TrademarkValuationRunner : IToolRunner
         var probWeightedValue = probRows.Sum(r => r.Prob * r.Value);
         var probSuccess = s.ProbScenarios.Sum(x => x.Prob * x.Success);
 
-        // Monte Carlo
-        var n         = s.Mc.Iterations;
+        // Monte Carlo — clamp the caller-supplied run count: 0 iterations used to
+        // throw on Average() (500) and a huge/negative value on the array allocation.
+        var n         = Math.Clamp(s.Mc.Iterations, 1, 20_000);
         var mcResults = new double[n];
 
         for (var i = 0; i < n; i++)

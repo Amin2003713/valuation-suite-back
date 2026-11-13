@@ -8,6 +8,10 @@ public static class FinanceMath
     /// <summary>Triangular distribution sample.</summary>
     public static double Triangular(double low, double mode, double high)
     {
+        /* Degenerate range (low = high, common with empty/default inputs) → the
+         * point mass itself; dividing by (high − low) would otherwise return NaN. */
+        if (high <= low) return low;
+
         var r = Random.Shared.NextDouble();
         var f = (mode - low) / (high - low);
         if (r < f)
@@ -46,14 +50,31 @@ public static class FinanceMath
     }
 
     public static double GrowingAnnuityPV(double p, double g, double d, double n)
-        => (p * (1 + g)) / (d - g) * (1 - Math.Pow((1 + g) / (1 + d), n));
+    {
+        if (n <= 0) return 0;
+        // g = d is the limit of the formula: an undiscounted p per year.
+        if (Math.Abs(d - g) < 1e-12) return p * n;
+        if (d <= -1) return 0;
+        return (p * (1 + g)) / (d - g) * (1 - Math.Pow((1 + g) / (1 + d), n));
+    }
 
     public static double OrdinaryAnnuityPV(double p, double d, double n)
-        => (p / d) * (1 - Math.Pow(1 / (1 + d), n));
+    {
+        if (n <= 0) return 0;
+        // d = 0 is the limit of the formula: an undiscounted p per year.
+        if (Math.Abs(d) < 1e-12) return p * n;
+        if (d <= -1) return 0;
+        return (p / d) * (1 - Math.Pow(1 / (1 + d), n));
+    }
 
     public static (double Mean, double P10, double P50, double P90, double Min, double Max, double Stdev, int[] Hist, string[] HistLabels) Summarize(
-        double[] values, int bins = 12)
+        double[] values, int bins = 12    )
     {
+        /* Empty sample (e.g. a partial payload with N = 0 or a model that never
+         * produced a draw) must summarise to zeros, not throw IndexOutOfRange. */
+        if (values.Length == 0)
+            return (0, 0, 0, 0, 0, 0, 0, new int[Math.Max(1, bins)], new string[Math.Max(1, bins)]);
+
         var sorted = (double[])values.Clone();
         Array.Sort(sorted);
         var mean = values.Average();

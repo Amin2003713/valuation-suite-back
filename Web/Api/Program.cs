@@ -196,18 +196,37 @@ public class Program
                     logger.LogInformation("Database migrations applied");
                 }
 
-                await scope.ServiceProvider.GetRequiredService<Application.Assessments.Seeding.IpAssessmentSeederRunner>()
-                    .RunAsync();
+                /* Each seed step is isolated: one failing seeder must not leave the
+                 * remaining content unseeded (a single untranslatable query in the
+                 * question seeder once aborted every step after it). */
+                async Task SeedStepAsync(string name, Func<Task> step)
+                {
+                    try
+                    {
+                        await step();
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.LogError(ex, "Startup seeding step '{Step}' failed", name);
+                    }
+                }
 
-                await Application.Tools.Seeding.ToolFormsSeeder.SeedAsync(
-                    scope.ServiceProvider.GetRequiredService<Application.Tools.Seeding.IToolFormsDbContext>(),
-                    logger);
+                await SeedStepAsync("ip-assessment", () =>
+                    scope.ServiceProvider.GetRequiredService<Application.Assessments.Seeding.IpAssessmentSeederRunner>()
+                        .RunAsync());
 
-                await Application.Tools.Seeding.ToolQuestionsSeeder.SeedAsync(
-                    scope.ServiceProvider.GetRequiredService<Application.Tools.Seeding.IToolFormsDbContext>(),
-                    logger);
+                await SeedStepAsync("tool-forms", () =>
+                    Application.Tools.Seeding.ToolFormsSeeder.SeedAsync(
+                        scope.ServiceProvider.GetRequiredService<Application.Tools.Seeding.IToolFormsDbContext>(),
+                        logger));
 
-                await scope.ServiceProvider.GetRequiredService<Application.Admin.AdminBootstrapper>().RunAsync();
+                await SeedStepAsync("tool-questions", () =>
+                    Application.Tools.Seeding.ToolQuestionsSeeder.SeedAsync(
+                        scope.ServiceProvider.GetRequiredService<Application.Tools.Seeding.IToolFormsDbContext>(),
+                        logger));
+
+                await SeedStepAsync("admin-bootstrap", () =>
+                    scope.ServiceProvider.GetRequiredService<Application.Admin.AdminBootstrapper>().RunAsync());
             }
             catch (Exception ex)
             {

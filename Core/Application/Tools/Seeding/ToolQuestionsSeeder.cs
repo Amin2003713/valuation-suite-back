@@ -15,8 +15,10 @@ namespace Application.Tools.Seeding;
 public static class ToolQuestionsSeeder
 {
     /// <summary>
-    ///     Question ids a tool no longer asks. Removed on startup so a stale row —
-    ///     especially a required one — can never reject a run of a reworked tool.
+    ///     Question ids a tool no longer asks (explicit list). Removed on startup so a
+    ///     stale row — especially a required one — can never reject a run of a reworked
+    ///     tool. Tools with seeded definitions additionally get the generic sweep below,
+    ///     which retires every row whose id is not (or is no longer) in the definitions.
     /// </summary>
     private static readonly Dictionary<string, string[]> RetiredQuestionIds = new()
     {
@@ -30,22 +32,6 @@ public static class ToolQuestionsSeeder
         var defs = Definitions();
 
         var retired = 0;
-        foreach (var (tool, ids) in RetiredQuestionIds)
-        {
-            if (!ToolRegistry.TryGetQuestion(tool, out var retiredQType)) continue;
-            var doomed = SetOf(db, retiredQType).Cast<ToolQuestionBase>()
-                .Where(q => ids.Contains(q.QuestionId, StringComparer.OrdinalIgnoreCase)).ToList();
-            foreach (var row in doomed)
-            {
-                db.RemoveEntity(row);
-                retired++;
-            }
-
-            if (!ToolRegistry.TryGetLocalization(tool, out var retiredLType)) continue;
-            foreach (var row in SetOf(db, retiredLType).Cast<ToolLocalizationBase>()
-                         .Where(l => ids.Contains(l.QuestionId, StringComparer.OrdinalIgnoreCase)).ToList())
-                db.RemoveEntity(row);
-        }
 
         /* Existing per-tool question rows + localization rows (only the tools that
          * actually have question content are inspected — keeps startup cheap). */
@@ -61,8 +47,54 @@ public static class ToolQuestionsSeeder
             foreach (var q in rows) existingQuestion.Add($"{code}|{q.QuestionId}");
 
             if (!ToolRegistry.TryGetLocalization(code, out var lType)) continue;
-            foreach (var l in SetOf(db, lType).Cast<ToolLocalizationBase>())
+            foreach (var l in SetOf(db, lType).Cast<ToolLocalizationBase>().ToList())
                 existingLoc.Add($"{code}|{l.Language}|{l.QuestionId}");
+        }
+
+        /* Generic self-heal: for every tool whose questions are seeded from this file,
+         * drop question/localization rows whose id is not part of the current
+         * definitions (or is in RetiredQuestionIds). Renaming or removing a question
+         * in the seed therefore can never leave behind a required row that rejects
+         * every run — the exact failure the explicit retire list above was patched for.
+         * Admin content edits only retitle existing rows, so no admin data is lost. */
+        var definedIds = defs
+            .GroupBy(d => d.ToolCode)
+            .ToDictionary(g => g.Key, g => g.Select(d => d.Id).ToHashSet(StringComparer.OrdinalIgnoreCase),
+                StringComparer.OrdinalIgnoreCase);
+        foreach (var (code, ids) in definedIds)
+        {
+            var retiredForTool = RetiredQuestionIds.TryGetValue(code, out var explicitIds)
+                ? explicitIds
+                : [];
+
+            if (existingRowsByTool.TryGetValue(code, out var rows))
+            {
+                var stale = rows.Where(r =>
+                        !ids.Contains(r.QuestionId) ||
+                        retiredForTool.Contains(r.QuestionId, StringComparer.OrdinalIgnoreCase))
+                    .ToList();
+                foreach (var row in stale)
+                {
+                    db.RemoveEntity(row);
+                    rows.Remove(row);
+                    existingQuestion.Remove($"{code}|{row.QuestionId}");
+                    retired++;
+                }
+            }
+
+            if (!ToolRegistry.TryGetLocalization(code, out var locType)) continue;
+            /* Materialize before filtering: StringComparer-based Contains is not
+             * translatable to SQL (EF would throw and abort the whole seed). */
+            var staleLoc = SetOf(db, locType).Cast<ToolLocalizationBase>().ToList()
+                .Where(l => l.QuestionId != ToolLocalizationBase.ToolLevelQuestionId &&
+                            (!ids.Contains(l.QuestionId) ||
+                             retiredForTool.Contains(l.QuestionId, StringComparer.OrdinalIgnoreCase)))
+                .ToList();
+            foreach (var row in staleLoc)
+            {
+                db.RemoveEntity(row);
+                existingLoc.Remove($"{code}|{row.Language}|{row.QuestionId}");
+            }
         }
 
         var missing = defs.Where(d => !existingQuestion.Contains($"{d.ToolCode}|{d.Id}")).ToList();
