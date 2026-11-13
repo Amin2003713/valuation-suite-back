@@ -118,6 +118,7 @@ public static class ToolFormsSeeder
         ["DIGITAL-AI"] = ("Digital Maturity & AI Readiness", "24 general questions + 24 specialist indicators with red/amber alerts"),
         ["MATURITY"] = ("Organisation Maturity Assessment", "10 domains / 60 indicators with evidence weighting and critical gates"),
         ["STARTUP-ASSESS"] = ("Startup Assessment", "Multi-criteria startup assessment: 10 axes / 60 criteria with stages, critical-risk flags and evidence quality"),
+        ["AMBIDEXTERITY"] = ("Organizational Ambidexterity Diagnostic", "5 sections / 15 questions: balance between exploitation and exploration"),
     };
 
     /// <summary>
@@ -156,6 +157,7 @@ public static class ToolFormsSeeder
             ["DIGITAL-AI"] = (0, 150_000, "digital-ai-readiness"),
             ["MATURITY"] = (0, 150_000, "maturity-assessment"),
             ["STARTUP-ASSESS"] = (0, 150_000, "startup-assessment"),
+            ["AMBIDEXTERITY"] = (0, 150_000, "organizational-ambidexterity"),
         };
 
         public static (long Advanced, long Advice, string Route) For(string code) =>
@@ -351,6 +353,9 @@ public static class ToolFormsSeeder
 
         ("MATURITY", "سنجش بلوغ و آمادگی سازمان", "۱۰ حوزه / ۶۰ شاخص با ضریب شواهد و گیت شروط حیاتی", ToolKind.Assessment,
             Json(new { domains = 10, questions = 60, evidenceOptions = new[] { "بدون مدرک", "مدرک محدود یا قدیمی", "مدرک معتبر و جاری" } }), 25),
+
+        ("AMBIDEXTERITY", "ابزار تشخیصی دوسویی سازمانی", "۵ بخش و ۱۵ پرسش برای سنجش توازن بهره‌برداری و کاوش سازمان", ToolKind.Assessment,
+            Json(new { sections = 5, questionsPerSection = 3, scale = 5 }), 27),
 
         ("STARTUP-ASSESS", "ارزیابی استارتاپ", "مدل ارزیابی چندمعیاره: ۱۰ محور، ۶۰ معیار با مرحله‌بندی، ریسک بحرانی و کیفیت شاهد", ToolKind.Assessment,
             Json(new

@@ -37,6 +37,7 @@ public static class ToolRegistry
             ["EXPORT-READ"] = new(typeof(ExportReadinessSubmission), typeof(ExportReadinessQuestion), typeof(ExportReadinessLocalization)),
             ["DIGITAL-AI"] = new(typeof(DigitalAiReadinessSubmission), typeof(DigitalAiReadinessQuestion), typeof(DigitalAiReadinessLocalization)),
             ["MATURITY"] = new(typeof(MaturityAssessmentSubmission), typeof(MaturityAssessmentQuestion), typeof(MaturityAssessmentLocalization)),
+            ["AMBIDEXTERITY"] = new(typeof(OrganizationalAmbidexteritySubmission), typeof(OrganizationalAmbidexterityQuestion), typeof(OrganizationalAmbidexterityLocalization)),
         };
 
     public static IEnumerable<Type> SubmissionTypes => ByToolCode.Values.Select(v => v.Submission);

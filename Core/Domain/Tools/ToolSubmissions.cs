@@ -56,3 +56,5 @@ public sealed class ExportReadinessSubmission : ToolSubmissionBase;
 public sealed class DigitalAiReadinessSubmission : ToolSubmissionBase;
 
 public sealed class MaturityAssessmentSubmission : ToolSubmissionBase;
+
+public sealed class OrganizationalAmbidexteritySubmission : ToolSubmissionBase;

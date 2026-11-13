@@ -51,6 +51,7 @@ public static class ToolRunnerRegistration
         services.AddSingleton<IToolRunner, ExportReadinessRunner>();
         services.AddSingleton<IToolRunner, DigitalAiReadinessRunner>();
         services.AddSingleton<IToolRunner, MaturityAssessmentRunner>();
+        services.AddSingleton<IToolRunner, OrganizationalAmbidexterityRunner>();
         services.AddSingleton<IToolRunner, StartupAssessmentRunner>();
 
         services.AddSingleton<IToolRunnerResolver, ToolRunnerResolver>();
