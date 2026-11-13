@@ -44,13 +44,10 @@ public sealed class IconScorecardRunner : IToolRunner
         var scoreTotal = s.Scorecard.Sum(r => r.Weight * r.Score);
         var scorecard  = rfr * (0.5 + 0.5 * (scoreTotal / 100));
 
-        // Monte Carlo proxy: RFR is the central estimate; the uncertainty band
-        // scales with how the MC growth bounds compare to the point growth.
-        var gScale = s.Growth > 0 ? 1.0 : 1.0;
-        var lo = s.Growth > 0 ? Math.Max(0.4, Math.Min(1, s.McGrowthLow / s.Growth)) : 1;
-        var hi = s.Growth > 0 ? Math.Max(1, Math.Min(2.2, s.McGrowthHigh / s.Growth)) : 1;
-        var mcRangeLow  = rfr * 0.65 * lo;
-        var mcRangeHigh = rfr * 1.5 * hi;
+        // Monte Carlo proxy — the source itself does not simulate: it reports the
+        // RFR as the central value and the fixed ×0.65 / ×1.5 band around it.
+        var mcRangeLow  = rfr * 0.65;
+        var mcRangeHigh = rfr * 1.5;
 
         // Weighted final — RFR primary, market and scorecard are controls.
         var wRfr = 0.6 * 0.9;
@@ -65,6 +62,7 @@ public sealed class IconScorecardRunner : IToolRunner
             Scorecard: scorecard,
             ScoreTotal: scoreTotal,
             Mc: rfr,
+            CostRow: rfr * 0.15, // the source's "Cost" bar in the results list
             McLow: mcRangeLow,
             McHigh: mcRangeHigh,
             Final: final,
@@ -138,6 +136,7 @@ public sealed class IconScorecardRunner : IToolRunner
         double Scorecard,
         double ScoreTotal,
         double Mc,
+        double CostRow,
         double McLow,
         double McHigh,
         double Final,

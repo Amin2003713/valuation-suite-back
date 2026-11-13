@@ -4,48 +4,30 @@ using Common.Exceptions;
 namespace Application.Tools.Runners;
 
 /* ════════════════════════════════════════════════════════════════════
- * Innovation Readiness (KTH) — ported from the KTH Innovation Readiness
- * Levels dashboard: 9 readiness levels, 3 questions each, every option a
- * band of the 1–9 readiness scale (question metadata: app/innovation-
- * readiness/data.ts, seeded into the tool's question table).
+ * Innovation Readiness — ported from the source dashboard
+ * ("innovatonreadinesslevel propexity.html"): nine readiness indicators,
+ * each scored directly on 0–9 by the user (10 described levels per
+ * indicator). There is no questionnaire aggregation in the source.
  *
- *   optionLevel = 1 + (value − 1) × 8 / (options − 1)   → evenly spaced band
- *   levelScore  = round(mean of the answered optionLevels)  → 1..9
- *   average     = round(mean of the level scores, 1)        → 1..9  (display)
- *   percent     = mean of the level scores / 9 × 100        → 0..100 (OverallScore)
+ *   average = round(mean of the nine scores, 1)        → 0..9  (display)
+ *   percent = mean of the nine scores / 9 × 100        → 0..100 (OverallScore)
+ *   band    = ≤3 low · ≤6 medium · else high           (indicator + overall)
+ *   gaps    = number of indicators scored ≤ 3          ("gapCount")
  *
- * The percent is derived from the *unrounded* mean of the level scores, so it
- * equals the average of the per-level percents instead of being inflated by the
- * 1-decimal rounding of `average` (4.5556 → 50.6, not 4.6 → 51.1).
- *
- * Status per level (≤3 weak · ≤6 medium · else strong), the overall level
- * text and the strongest/weakest dimensions are computed here; the client
- * only renders them. Strings follow the run language (input "lang").
+ * Analysis groups follow the source exactly: strong = score ≥ 7 (desc, max 3),
+ * weak = score ≤ 3 (ascending, max 3), medium = 4..6 (desc, max 3).
+ * Content (names, level texts, actions) lives in the client data file; this
+ * runner only computes the numbers, bands and group membership.
  * ════════════════════════════════════════════════════════════════════ */
 
 public sealed class InnovationReadinessRunner : IToolRunner
 {
     public string ToolCode => "INNOV-READ";
 
-    private sealed record QuestionDef(string Key, int Options);
+    private static readonly string[] Keys =
+        ["crl", "trl", "brl", "iprl", "tmrl", "frl", "lrl", "scrl", "srl"];
 
-    private sealed record LevelDef(string Key, QuestionDef[] Questions);
-
-    /** Option counts mirror the client's data file (per-question option sets). */
-    private static readonly LevelDef[] Levels =
-    [
-        new("crl", [new("crl-q1", 4), new("crl-q2", 3), new("crl-q3", 3)]),
-        new("trl", [new("trl-q1", 4), new("trl-q2", 3), new("trl-q3", 3)]),
-        new("brl", [new("brl-q1", 4), new("brl-q2", 3), new("brl-q3", 3)]),
-        new("iprl", [new("iprl-q1", 4), new("iprl-q2", 3), new("iprl-q3", 3)]),
-        new("tmrl", [new("tmrl-q1", 4), new("tmrl-q2", 3), new("tmrl-q3", 3)]),
-        new("frl", [new("frl-q1", 4), new("frl-q2", 3), new("frl-q3", 3)]),
-        new("lrl", [new("lrl-q1", 4), new("lrl-q2", 3), new("lrl-q3", 3)]),
-        new("scrl", [new("scrl-q1", 4), new("scrl-q2", 3), new("scrl-q3", 3)]),
-        new("srl", [new("srl-q1", 4), new("srl-q2", 3), new("srl-q3", 3)]),
-    ];
-
-    private static readonly int TotalQuestions = Levels.Sum(l => l.Questions.Length);
+    private static readonly int TotalIndicators = Keys.Length;
 
     public ToolRunOutcome Run(JsonElement input)
     {
@@ -53,76 +35,70 @@ public sealed class InnovationReadinessRunner : IToolRunner
         var loc = new ToolLocalization(i.Lang);
         var answers = i.Answers ?? [];
 
-        var indicators = new List<InnoIndicatorScore>();
-        var answeredQuestions = 0;
-
-        foreach (var level in Levels)
-        {
-            var optionLevels = new List<double>();
-
-            foreach (var q in level.Questions)
+        var scores = Keys
+            .Select(key =>
             {
-                if (!answers.TryGetValue(q.Key, out var value)) continue;
-                if (value < 1 || value > q.Options)
+                // The source's selects start at 0, so an omitted key is level 0.
+                var value = answers.TryGetValue(key, out var raw) ? raw : 0;
+                if (value < 0 || value > 9)
                     throw ValuationException.BadRequest(
-                        $"پاسخ «{q.Key}» باید بین ۱ تا {q.Options} باشد. (INNOV-READ)");
+                        $"امتیاز «{key}» باید بین ۰ تا ۹ باشد. (INNOV-READ)");
+                return (Key: key, Score: value);
+            })
+            .ToList();
 
-                // Evenly spaced band midpoint on the 1–9 readiness scale.
-                optionLevels.Add(1 + (value - 1) * 8.0 / (q.Options - 1));
-                answeredQuestions++;
-            }
+        var mean = scores.Average(x => x.Score);
+        var average = Math.Round(mean, 1);
+        var percent = Math.Round(mean / 9 * 100, 1);
+        var gapCount = scores.Count(x => x.Score <= 3);
 
-            if (optionLevels.Count == 0) continue;
+        var indicators = scores
+            .Select(x => new InnoIndicatorScore(
+                x.Key, x.Score, Math.Round(x.Score / 9 * 100, 1), StatusOf(x.Score, loc)))
+            .ToList();
 
-            var score = Round(optionLevels.Average());
-            indicators.Add(new InnoIndicatorScore(level.Key, score, PercentOf(score), StatusOf(score, loc)));
-        }
+        // Stable ranking, ties by the source's indicator order.
+        var sorted = scores
+            .OrderByDescending(x => x.Score)
+            .ThenBy(x => Array.IndexOf(Keys, x.Key))
+            .ToList();
 
-        var meanScore = indicators.Count > 0 ? indicators.Average(x => x.Score) : 0;
-        var average = Math.Round(meanScore, 1);
-        var percent = Math.Round(meanScore / 9 * 100, 1);
+        var strongPoints = sorted.Where(x => x.Score >= 7).Take(3).Select(x => x.Key).ToList();
+        var weakPoints = sorted.AsEnumerable().Reverse()
+            .Where(x => x.Score <= 3).Take(3).Select(x => x.Key).ToList();
+        var mediumPoints = sorted
+            .Where(x => x.Score is >= 4 and <= 6).Take(3).Select(x => x.Key).ToList();
 
         var levelText = average switch
         {
-            <= 3 => loc.Pick(
-                "پروژه در مراحل اولیه آمادگی نوآوری قرار دارد.",
-                "The project is at an early stage of innovation readiness."),
-            <= 6 => loc.Pick(
-                "پروژه در سطح متوسط آمادگی نوآوری قرار دارد و در برخی ابعاد نیاز به توسعه دارد.",
-                "The project is at a medium level of innovation readiness and needs development in some dimensions."),
-            _ => loc.Pick(
-                "پروژه از آمادگی نوآوری بالایی برخوردار است.",
-                "The project has a high level of innovation readiness."),
+            <= 3 => loc.Pick("آمادگی اولیه", "Initial Readiness"),
+            <= 6 => loc.Pick("آمادگی متوسط", "Moderate Readiness"),
+            _ => loc.Pick("آمادگی پیشرفته", "Advanced Readiness"),
         };
 
-        var strongest = indicators.OrderByDescending(x => x.Score).ThenBy(x => x.Key).FirstOrDefault()?.Key;
-        var weakest = indicators.OrderBy(x => x.Score).ThenBy(x => x.Key).FirstOrDefault()?.Key;
+        var answered = Keys.Count(k => answers.ContainsKey(k));
 
         var result = new InnoResult(
-            indicators, average, percent, levelText, strongest, weakest,
-            answeredQuestions, TotalQuestions);
+            indicators, average, percent, levelText,
+            sorted.FirstOrDefault().Key, sorted.LastOrDefault().Key,
+            gapCount, strongPoints, weakPoints, mediumPoints,
+            answered, TotalIndicators);
 
         return new ToolRunOutcome(result, percent, i.Name);
     }
 
-    /** 1–9 level → 0–100 normalization used by the benchmark radar. */
-    private static double PercentOf(double score) => Math.Round(score / 9 * 100, 1);
-
     private static string StatusOf(double score, ToolLocalization loc) => score switch
     {
-        <= 3 => loc.Pick("ضعیف", "Weak"),
-        <= 6 => loc.Pick("متوسط", "Medium"),
-        _ => loc.Pick("قوی", "Strong"),
+        <= 3 => loc.Pick("نیازمند اقدام فوری", "Requires Immediate Action"),
+        <= 6 => loc.Pick("در حال توسعه", "In Development"),
+        _ => loc.Pick("نقطه قوت", "Strength"),
     };
-
-    /** JS Math.round: half toward +∞. */
-    private static double Round(double x) => Math.Floor(x + 0.5);
 
     public sealed class InnoInput
     {
         public string? Name { get; set; }
 
-        /** question key → selected option value (1-based). */
+        /** indicator key → chosen readiness level (0..9). */
         public Dictionary<string, double> Answers { get; set; } = [];
 
         public string? Lang { get; set; }
@@ -132,5 +108,7 @@ public sealed class InnovationReadinessRunner : IToolRunner
 
     public sealed record InnoResult(
         List<InnoIndicatorScore> Indicators, double Average, double Percent, string Level,
-        string? Strongest, string? Weakest, int Answered, int Total);
+        string? Strongest, string? Weakest, int GapCount,
+        List<string> StrongPoints, List<string> WeakPoints, List<string> MediumPoints,
+        int Answered, int Total);
 }

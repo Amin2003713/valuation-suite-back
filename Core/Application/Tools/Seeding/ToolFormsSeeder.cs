@@ -97,7 +97,7 @@ public static class ToolFormsSeeder
     public static readonly Dictionary<string, (string Title, string? Description)> English = new()
     {
         ["IDEA-ASSESS"] = ("Idea Assessment", "Business idea potential assessment in 5 sections"),
-        ["INNOV-READ"] = ("KTH Innovation Readiness", "Innovation readiness assessment: 9 readiness levels, 3 questions each"),
+        ["INNOV-READ"] = ("Innovation Readiness", "Innovation readiness assessment: 9 indicators scored 0–9"),
         ["IP-AUDIT"] = ("IP Audit", "Register your IP assets and compute their risk"),
         ["JOB-EVAL"] = ("Job Values Assessment", "Discover your core work values and the right job"),
         ["WIPO-DIAG"] = ("WIPO Diagnostics", "Intellectual property health check (WIPO)"),
@@ -185,7 +185,7 @@ public static class ToolFormsSeeder
                 maxTotal = 135,
             }), 1),
 
-        ("INNOV-READ", "KTH Innovation Readiness", "سنجش آمادگی نوآوری در ۹ سطح (۲۷ پرسش)", ToolKind.Assessment,
+        ("INNOV-READ", "Innovation Readiness", "سنجش آمادگی نوآوری در ۹ شاخص (مقیاس ۰ تا ۹)", ToolKind.Assessment,
             Json(new
             {
                 indicators = new object[]

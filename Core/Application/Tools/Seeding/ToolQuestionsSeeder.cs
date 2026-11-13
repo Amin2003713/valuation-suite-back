@@ -22,9 +22,17 @@ public static class ToolQuestionsSeeder
     /// </summary>
     private static readonly Dictionary<string, string[]> RetiredQuestionIds = new()
     {
-        // INNOV-READ moved from nine 0–10 sliders to the 27-question KTH
-        // questionnaire (per-level question ids replace the indicator ids).
-        ["INNOV-READ"] = ["crl", "trl", "brl", "iprl", "tmrl", "frl", "lrl", "scrl", "srl"],
+        // INNOV-READ uses the source dashboard's nine 0–9 indicators again
+        // (content lives in the client), so the retired KTH questionnaire ids
+        // must stay inactive instead of the indicator ids.
+        ["INNOV-READ"] =
+        [
+            "crl-q1", "crl-q2", "crl-q3", "trl-q1", "trl-q2", "trl-q3",
+            "brl-q1", "brl-q2", "brl-q3", "iprl-q1", "iprl-q2", "iprl-q3",
+            "tmrl-q1", "tmrl-q2", "tmrl-q3", "frl-q1", "frl-q2", "frl-q3",
+            "lrl-q1", "lrl-q2", "lrl-q3", "scrl-q1", "scrl-q2", "scrl-q3",
+            "srl-q1", "srl-q2", "srl-q3",
+        ],
     };
 
     public static async Task SeedAsync(IToolFormsDbContext db, ILogger logger, CancellationToken ct = default)
@@ -181,7 +189,7 @@ public static class ToolQuestionsSeeder
     private static readonly Dictionary<string, (string AnswerType, bool Required, int? Min, int? Max)> Meta = new()
     {
         ["IDEA-ASSESS"] = ("scale", true, 1, 5),     // client blocks incomplete runs
-        ["INNOV-READ"] = ("scale", true, 1, 4),      // KTH: every question is answered (1..n options)
+        ["INNOV-READ"] = ("scale", false, 0, 9),     // nine 0–9 readiness levels (content in the client)
         ["IPSCORE"] = ("scale", false, 1, 5),        // client allows partial questionnaires
         ["WIPO-DIAG"] = ("choice", false, null, null), // yes/no/not-sure; partial runs allowed
         ["JOB-EVAL"] = ("taglist", false, null, null), // arrays of tags, not option values
@@ -231,35 +239,6 @@ public static class ToolQuestionsSeeder
         [("IDEA-ASSESS", "financial_q3")] = ("How high is the project's financial risk?", "Financial", null),
         [("IDEA-ASSESS", "financial_q4")] = ("How high are the fixed and variable costs?", "Financial", null),
         [("IDEA-ASSESS", "financial_q5")] = ("How strong is the long-term profit potential?", "Financial", null),
-
-        // ── INNOV-READ (KTH: 9 levels × 3 questions) ──
-        [("INNOV-READ", "crl-q1")] = ("How many active users/customers do you have?", "Customer readiness (CRL)", new Dictionary<string, string> { ["1"] = "None (Level 1-2)", ["2"] = "Small number (Level 3-4)", ["3"] = "Substantial number (Level 5-6)", ["4"] = "Large and growing (Level 7-9)" }),
-        [("INNOV-READ", "crl-q2")] = ("Have you made commercial sales?", "Customer readiness (CRL)", new Dictionary<string, string> { ["1"] = "No (Level 1-3)", ["2"] = "First sales (Level 4-6)", ["3"] = "Widespread sales (Level 7-9)" }),
-        [("INNOV-READ", "crl-q3")] = ("What is the status of your sales process?", "Customer readiness (CRL)", new Dictionary<string, string> { ["1"] = "Not implemented (Level 1-3)", ["2"] = "Implemented (Level 4-6)", ["3"] = "Scalable and repeatable (Level 7-9)" }),
-        [("INNOV-READ", "trl-q1")] = ("What is the current state of your technology?", "Technology readiness (TRL)", new Dictionary<string, string> { ["1"] = "Research idea (Level 1-2)", ["2"] = "Lab prototype (Level 3-4)", ["3"] = "Field tested (Level 5-6)", ["4"] = "Operational (Level 7-9)" }),
-        [("INNOV-READ", "trl-q2")] = ("Have you tested in a realistic environment?", "Technology readiness (TRL)", new Dictionary<string, string> { ["1"] = "No (Level 1-3)", ["2"] = "Lab testing (Level 4-5)", ["3"] = "Real environment (Level 6-9)" }),
-        [("INNOV-READ", "trl-q3")] = ("Is your technology complete and functional?", "Technology readiness (TRL)", new Dictionary<string, string> { ["1"] = "Incomplete (Level 1-4)", ["2"] = "Complete but unproven (Level 5-6)", ["3"] = "Complete and proven (Level 7-9)" }),
-        [("INNOV-READ", "brl-q1")] = ("Have you validated your business model?", "Business readiness (BRL)", new Dictionary<string, string> { ["1"] = "No model (Level 1-2)", ["2"] = "Model described (Level 3-4)", ["3"] = "Model tested (Level 5-6)", ["4"] = "Model proven (Level 7-9)" }),
-        [("INNOV-READ", "brl-q2")] = ("Do you have financial projections?", "Business readiness (BRL)", new Dictionary<string, string> { ["1"] = "No projections (Level 1-3)", ["2"] = "Initial projections (Level 4-5)", ["3"] = "Detailed projections (Level 6-9)" }),
-        [("INNOV-READ", "brl-q3")] = ("Have you identified your target market?", "Business readiness (BRL)", new Dictionary<string, string> { ["1"] = "No market identified (Level 1-2)", ["2"] = "Market identified (Level 3-5)", ["3"] = "Market validated (Level 6-9)" }),
-        [("INNOV-READ", "iprl-q1")] = ("Have you identified potential Intellectual Property?", "IPR readiness (IPRL)", new Dictionary<string, string> { ["1"] = "No IP identified (Level 1)", ["2"] = "IP identified (Level 2-3)", ["3"] = "IP protection strategy (Level 4-6)", ["4"] = "IP protected (Level 7-9)" }),
-        [("INNOV-READ", "iprl-q2")] = ("Have you filed for IP protection?", "IPR readiness (IPRL)", new Dictionary<string, string> { ["1"] = "No filings (Level 1-3)", ["2"] = "Draft filed (Level 4-5)", ["3"] = "IP granted (Level 6-9)" }),
-        [("INNOV-READ", "iprl-q3")] = ("Do you have a freedom-to-operate analysis?", "IPR readiness (IPRL)", new Dictionary<string, string> { ["1"] = "No analysis (Level 1-3)", ["2"] = "Initial analysis (Level 4-5)", ["3"] = "Complete analysis (Level 6-9)" }),
-        [("INNOV-READ", "tmrl-q1")] = ("Do you have a founding team?", "Team readiness (TMRL)", new Dictionary<string, string> { ["1"] = "Individual (Level 1-2)", ["2"] = "Small team (Level 3-4)", ["3"] = "Complete team (Level 5-7)", ["4"] = "Organized structure (Level 8-9)" }),
-        [("INNOV-READ", "tmrl-q2")] = ("Do you have all necessary competencies?", "Team readiness (TMRL)", new Dictionary<string, string> { ["1"] = "Limited competencies (Level 1-3)", ["2"] = "Key competencies (Level 4-6)", ["3"] = "All competencies (Level 7-9)" }),
-        [("INNOV-READ", "tmrl-q3")] = ("Is the team committed?", "Team readiness (TMRL)", new Dictionary<string, string> { ["1"] = "Not committed (Level 1-2)", ["2"] = "Partially committed (Level 3-5)", ["3"] = "Fully committed (Level 6-9)" }),
-        [("INNOV-READ", "frl-q1")] = ("Have you secured funding?", "Funding readiness (FRL)", new Dictionary<string, string> { ["1"] = "No funding (Level 1-2)", ["2"] = "Seed funding (Level 3-4)", ["3"] = "Series funding (Level 5-7)", ["4"] = "Sustainable funding (Level 8-9)" }),
-        [("INNOV-READ", "frl-q2")] = ("Do you have a funding strategy?", "Funding readiness (FRL)", new Dictionary<string, string> { ["1"] = "No strategy (Level 1-3)", ["2"] = "Initial strategy (Level 4-5)", ["3"] = "Developed strategy (Level 6-9)" }),
-        [("INNOV-READ", "frl-q3")] = ("Do you have financial monitoring?", "Funding readiness (FRL)", new Dictionary<string, string> { ["1"] = "No monitoring (Level 1-3)", ["2"] = "Basic monitoring (Level 4-6)", ["3"] = "Advanced monitoring (Level 7-9)" }),
-        [("INNOV-READ", "lrl-q1")] = ("Is your solution legally compliant?", "Legal readiness (LRL)", new Dictionary<string, string> { ["1"] = "No compliance (Level 1-2)", ["2"] = "Compliance described (Level 3-4)", ["3"] = "Compliance validated (Level 5-7)", ["4"] = "Compliance proven (Level 8-9)" }),
-        [("INNOV-READ", "lrl-q2")] = ("Have you completed a legal compliance audit?", "Legal readiness (LRL)", new Dictionary<string, string> { ["1"] = "No audit (Level 1-3)", ["2"] = "Audit planned (Level 4-5)", ["3"] = "Audit completed (Level 6-9)" }),
-        [("INNOV-READ", "lrl-q3")] = ("Have you refined your solution within the legal system?", "Legal readiness (LRL)", new Dictionary<string, string> { ["1"] = "No refinement (Level 1-3)", ["2"] = "Initial refinement (Level 4-6)", ["3"] = "Refinement complete (Level 7-9)" }),
-        [("INNOV-READ", "scrl-q1")] = ("Have you identified societal needs?", "Society readiness (SCRL)", new Dictionary<string, string> { ["1"] = "No identification (Level 1)", ["2"] = "Needs identified (Level 2-3)", ["3"] = "Needs validated (Level 4-6)", ["4"] = "Needs proven (Level 7-9)" }),
-        [("INNOV-READ", "scrl-q2")] = ("Have you shared with stakeholders?", "Society readiness (SCRL)", new Dictionary<string, string> { ["1"] = "No sharing (Level 1-2)", ["2"] = "Initial sharing (Level 3-4)", ["3"] = "Extensive sharing (Level 5-9)" }),
-        [("INNOV-READ", "scrl-q3")] = ("Have you demonstrated your solution with stakeholders?", "Society readiness (SCRL)", new Dictionary<string, string> { ["1"] = "No demonstration (Level 1-3)", ["2"] = "Controlled demo (Level 4-6)", ["3"] = "Real environment demo (Level 7-9)" }),
-        [("INNOV-READ", "srl-q1")] = ("Are you aware of sustainability aspects?", "Sustainability readiness (SRL)", new Dictionary<string, string> { ["1"] = "No awareness (Level 1)", ["2"] = "Some awareness (Level 2)", ["3"] = "Awareness defined (Level 3-4)", ["4"] = "Awareness integrated (Level 5-9)" }),
-        [("INNOV-READ", "srl-q2")] = ("Have you tested your business concept with sustainability?", "Sustainability readiness (SRL)", new Dictionary<string, string> { ["1"] = "No testing (Level 1-3)", ["2"] = "Initial testing (Level 4-5)", ["3"] = "Comprehensive testing (Level 6-9)" }),
-        [("INNOV-READ", "srl-q3")] = ("Is sustainability part of your business model?", "Sustainability readiness (SRL)", new Dictionary<string, string> { ["1"] = "Not part (Level 1-3)", ["2"] = "Partially included (Level 4-6)", ["3"] = "Fully integrated (Level 7-9)" }),
 
         // ── WIPO-DIAG ──
         [("WIPO-DIAG", "tmRegistered")] = ("Have you registered a trademark with a national or regional IP office, or filed an application for one?", "Trademarks", YesNo),
@@ -388,63 +367,6 @@ public static class ToolQuestionsSeeder
         Def("IDEA-ASSESS", "financial_q3", "financial", "مالی", "ریسک مالی پروژه چقدر است؟", 42),
         Def("IDEA-ASSESS", "financial_q4", "financial", "مالی", "هزینه‌های ثابت و متغیر چقدر است؟", 43),
         Def("IDEA-ASSESS", "financial_q5", "financial", "مالی", "پتانسیل سودآوری در بلندمدت چقدر است؟", 44),
-
-        // ── INNOV-READ: KTH questionnaire — 27 questions, 9 readiness levels × 3 ──
-        // Option values are 1-based (they are the raw option picked on the client).
-        Def("INNOV-READ", "crl-q1", "crl", "آمادگی مشتری (CRL)", "تعداد کاربران/مشتریان فعال شما چقدر است؟", 1,
-            ["هیچ (سطح ۱-۲)", "تعداد کم (سطح ۳-۴)", "تعداد قابل توجه (سطح ۵-۶)", "زیاد و در حال رشد (سطح ۷-۹)"], 1),
-        Def("INNOV-READ", "crl-q2", "crl", "آمادگی مشتری (CRL)", "آیا فروش تجاری داشته‌اید؟", 2,
-            ["خیر (سطح ۱-۳)", "فروش اولیه (سطح ۴-۶)", "فروش گسترده (سطح ۷-۹)"], 1),
-        Def("INNOV-READ", "crl-q3", "crl", "آمادگی مشتری (CRL)", "وضعیت فرآیند فروش شما چیست؟", 3,
-            ["پیاده‌سازی نشده (سطح ۱-۳)", "پیاده‌سازی شده (سطح ۴-۶)", "مقیاس‌پذیر و تکرارپذیر (سطح ۷-۹)"], 1),
-        Def("INNOV-READ", "trl-q1", "trl", "آمادگی فناوری (TRL)", "وضعیت فعلی فناوری شما چیست؟", 4,
-            ["ایده تحقیقاتی (سطح ۱-۲)", "نمونه اولیه آزمایشگاهی (سطح ۳-۴)", "آزمون‌شده در میدان (سطح ۵-۶)", "عملیاتی (سطح ۷-۹)"], 1),
-        Def("INNOV-READ", "trl-q2", "trl", "آمادگی فناوری (TRL)", "آیا در محیط واقعی آزمایش کرده‌اید؟", 5,
-            ["خیر (سطح ۱-۳)", "آزمون آزمایشگاهی (سطح ۴-۵)", "محیط واقعی (سطح ۶-۹)"], 1),
-        Def("INNOV-READ", "trl-q3", "trl", "آمادگی فناوری (TRL)", "آیا فناوری شما کامل و کارآمد است؟", 6,
-            ["ناقص (سطح ۱-۴)", "کامل اما اثبات‌نشده (سطح ۵-۶)", "کامل و اثبات‌شده (سطح ۷-۹)"], 1),
-        Def("INNOV-READ", "brl-q1", "brl", "آمادگی کسب‌وکار (BRL)", "آیا مدل کسب‌وکار خود را اعتبارسنجی کرده‌اید؟", 7,
-            ["بدون مدل (سطح ۱-۲)", "مدل توصیف‌شده (سطح ۳-۴)", "مدل آزمون‌شده (سطح ۵-۶)", "مدل اثبات‌شده (سطح ۷-۹)"], 1),
-        Def("INNOV-READ", "brl-q2", "brl", "آمادگی کسب‌وکار (BRL)", "آیا پیش‌بینی مالی دارید؟", 8,
-            ["بدون پیش‌بینی (سطح ۱-۳)", "پیش‌بینی اولیه (سطح ۴-۵)", "پیش‌بینی تفصیلی (سطح ۶-۹)"], 1),
-        Def("INNOV-READ", "brl-q3", "brl", "آمادگی کسب‌وکار (BRL)", "آیا بازار هدف خود را شناسایی کرده‌اید؟", 9,
-            ["بازار شناسایی نشده (سطح ۱-۲)", "بازار شناسایی‌شده (سطح ۳-۵)", "بازار اعتبارسنجی‌شده (سطح ۶-۹)"], 1),
-        Def("INNOV-READ", "iprl-q1", "iprl", "آمادگی مالکیت فکری (IPRL)", "آیا مالکیت فکری بالقوه را شناسایی کرده‌اید؟", 10,
-            ["مالکیت فکری شناسایی نشده (سطح ۱)", "مالکیت فکری شناسایی‌شده (سطح ۲-۳)", "راهبرد حفاظت از مالکیت فکری (سطح ۴-۶)", "مالکیت فکری حفاظت‌شده (سطح ۷-۹)"], 1),
-        Def("INNOV-READ", "iprl-q2", "iprl", "آمادگی مالکیت فکری (IPRL)", "آیا برای حفاظت از مالکیت فکری درخواست ثبت داده‌اید؟", 11,
-            ["بدون ثبت (سطح ۱-۳)", "پیش‌نویس ثبت‌شده (سطح ۴-۵)", "مالکیت فکری اعطاشده (سطح ۶-۹)"], 1),
-        Def("INNOV-READ", "iprl-q3", "iprl", "آمادگی مالکیت فکری (IPRL)", "آیا تحلیل آزادی عمل (Freedom to Operate) دارید؟", 12,
-            ["بدون تحلیل (سطح ۱-۳)", "تحلیل اولیه (سطح ۴-۵)", "تحلیل کامل (سطح ۶-۹)"], 1),
-        Def("INNOV-READ", "tmrl-q1", "tmrl", "آمادگی تیم (TMRL)", "آیا تیم بنیان‌گذار دارید؟", 13,
-            ["فردی (سطح ۱-۲)", "تیم کوچک (سطح ۳-۴)", "تیم کامل (سطح ۵-۷)", "ساختار سازمان‌یافته (سطح ۸-۹)"], 1),
-        Def("INNOV-READ", "tmrl-q2", "tmrl", "آمادگی تیم (TMRL)", "آیا تمام شایستگی‌های لازم را دارید؟", 14,
-            ["شایستگی‌های محدود (سطح ۱-۳)", "شایستگی‌های کلیدی (سطح ۴-۶)", "همه شایستگی‌ها (سطح ۷-۹)"], 1),
-        Def("INNOV-READ", "tmrl-q3", "tmrl", "آمادگی تیم (TMRL)", "آیا تیم متعهد است؟", 15,
-            ["غیرمتعهد (سطح ۱-۲)", "تا حدی متعهد (سطح ۳-۵)", "کاملاً متعهد (سطح ۶-۹)"], 1),
-        Def("INNOV-READ", "frl-q1", "frl", "آمادگی تأمین مالی (FRL)", "آیا تأمین مالی کرده‌اید؟", 16,
-            ["بدون تأمین مالی (سطح ۱-۲)", "سرمایه بذری (سطح ۳-۴)", "سرمایه‌گذاری مرحله‌ای (سطح ۵-۷)", "تأمین مالی پایدار (سطح ۸-۹)"], 1),
-        Def("INNOV-READ", "frl-q2", "frl", "آمادگی تأمین مالی (FRL)", "آیا راهبرد تأمین مالی دارید؟", 17,
-            ["بدون راهبرد (سطح ۱-۳)", "راهبرد اولیه (سطح ۴-۵)", "راهبرد توسعه‌یافته (سطح ۶-۹)"], 1),
-        Def("INNOV-READ", "frl-q3", "frl", "آمادگی تأمین مالی (FRL)", "آیا پایش مالی دارید؟", 18,
-            ["بدون پایش (سطح ۱-۳)", "پایش پایه (سطح ۴-۶)", "پایش پیشرفته (سطح ۷-۹)"], 1),
-        Def("INNOV-READ", "lrl-q1", "lrl", "آمادگی قانونی (LRL)", "آیا راهکار شما از نظر قانونی منطبق است؟", 19,
-            ["بدون انطباق (سطح ۱-۲)", "انطباق توصیف‌شده (سطح ۳-۴)", "انطباق اعتبارسنجی‌شده (سطح ۵-۷)", "انطباق اثبات‌شده (سطح ۸-۹)"], 1),
-        Def("INNOV-READ", "lrl-q2", "lrl", "آمادگی قانونی (LRL)", "آیا ممیزی انطباق قانونی انجام داده‌اید؟", 20,
-            ["بدون ممیزی (سطح ۱-۳)", "ممیزی برنامه‌ریزی‌شده (سطح ۴-۵)", "ممیزی انجام‌شده (سطح ۶-۹)"], 1),
-        Def("INNOV-READ", "lrl-q3", "lrl", "آمادگی قانونی (LRL)", "آیا راهکار خود را در چارچوب قانونی اصلاح کرده‌اید؟", 21,
-            ["بدون اصلاح (سطح ۱-۳)", "اصلاح اولیه (سطح ۴-۶)", "اصلاح کامل (سطح ۷-۹)"], 1),
-        Def("INNOV-READ", "scrl-q1", "scrl", "آمادگی اجتماعی (SCRL)", "آیا نیازهای اجتماعی را شناسایی کرده‌اید؟", 22,
-            ["بدون شناسایی (سطح ۱)", "نیازها شناسایی‌شده (سطح ۲-۳)", "نیازها اعتبارسنجی‌شده (سطح ۴-۶)", "نیازها اثبات‌شده (سطح ۷-۹)"], 1),
-        Def("INNOV-READ", "scrl-q2", "scrl", "آمادگی اجتماعی (SCRL)", "آیا با ذی‌نفعان به اشتراک گذاشته‌اید؟", 23,
-            ["بدون اشتراک‌گذاری (سطح ۱-۲)", "اشتراک‌گذاری اولیه (سطح ۳-۴)", "اشتراک‌گذاری گسترده (سطح ۵-۹)"], 1),
-        Def("INNOV-READ", "scrl-q3", "scrl", "آمادگی اجتماعی (SCRL)", "آیا راهکار خود را به ذی‌نفعان نشان داده‌اید؟", 24,
-            ["بدون نمایش (سطح ۱-۳)", "نمایش کنترل‌شده (سطح ۴-۶)", "نمایش در محیط واقعی (سطح ۷-۹)"], 1),
-        Def("INNOV-READ", "srl-q1", "srl", "آمادگی پایداری (SRL)", "آیا از جنبه‌های پایداری آگاه هستید؟", 25,
-            ["بدون آگاهی (سطح ۱)", "آگاهی اندک (سطح ۲)", "آگاهی تعریف‌شده (سطح ۳-۴)", "آگاهی یکپارچه (سطح ۵-۹)"], 1),
-        Def("INNOV-READ", "srl-q2", "srl", "آمادگی پایداری (SRL)", "آیا مفهوم کسب‌وکار خود را با رویکرد پایداری آزموده‌اید؟", 26,
-            ["بدون آزمون (سطح ۱-۳)", "آزمون اولیه (سطح ۴-۵)", "آزمون جامع (سطح ۶-۹)"], 1),
-        Def("INNOV-READ", "srl-q3", "srl", "آمادگی پایداری (SRL)", "آیا پایداری بخشی از مدل کسب‌وکار شماست؟", 27,
-            ["بخشی از مدل نیست (سطح ۱-۳)", "تا حدی شامل شده (سطح ۴-۶)", "کاملاً یکپارچه (سطح ۷-۹)"], 1),
 
         // ── WIPO-DIAG: yes/no(/not-sure) with exact client wording ──
         Def("WIPO-DIAG", "tmRegistered", "trademark", "علامت‌های تجاری", "آیا علامت تجاری در دفتر مالکیت فکری ملی یا منطقه‌ای ثبت کرده‌اید یا برای آن درخواست داده‌اید؟", 1, ["بله", "خیر"]),
