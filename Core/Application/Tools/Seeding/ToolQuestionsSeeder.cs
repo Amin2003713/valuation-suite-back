@@ -41,13 +41,23 @@ public static class ToolQuestionsSeeder
 
         var retired = 0;
 
-        /* Existing per-tool question rows + localization rows (only the tools that
-         * actually have question content are inspected — keeps startup cheap). */
-        var toolsInDefs = defs.Select(d => d.ToolCode).Distinct().ToList();
+        /* Every tool that may still hold question rows: the tools seeded from this
+         * file plus the tools that only have retired ids (INNOV-READ keeps its nine
+         * 0–9 selects in the client and has no question definitions at all). Without
+         * the latter, a retire list for a definition-less tool would never be
+         * applied and its stale required rows would reject every run. */
+        var definedIds = defs
+            .GroupBy(d => d.ToolCode)
+            .ToDictionary(g => g.Key, g => g.Select(d => d.Id).ToHashSet(StringComparer.OrdinalIgnoreCase),
+                StringComparer.OrdinalIgnoreCase);
+        var toolsWithContent = definedIds.Keys
+            .Concat(RetiredQuestionIds.Keys)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
         var existingQuestion = new HashSet<string>();
         var existingLoc = new HashSet<string>();
         var existingRowsByTool = new Dictionary<string, List<ToolQuestionBase>>();
-        foreach (var code in toolsInDefs)
+        foreach (var code in toolsWithContent)
         {
             if (!ToolRegistry.TryGetQuestion(code, out var qType)) continue;
             var rows = SetOf(db, qType).Cast<ToolQuestionBase>().ToList();
@@ -64,13 +74,14 @@ public static class ToolQuestionsSeeder
          * definitions (or is in RetiredQuestionIds). Renaming or removing a question
          * in the seed therefore can never leave behind a required row that rejects
          * every run — the exact failure the explicit retire list above was patched for.
-         * Admin content edits only retitle existing rows, so no admin data is lost. */
-        var definedIds = defs
-            .GroupBy(d => d.ToolCode)
-            .ToDictionary(g => g.Key, g => g.Select(d => d.Id).ToHashSet(StringComparer.OrdinalIgnoreCase),
-                StringComparer.OrdinalIgnoreCase);
-        foreach (var (code, ids) in definedIds)
+         * Admin content edits only retitle existing rows, so no admin data is lost.
+         * A tool without definitions only loses the ids on its retire list. */
+        foreach (var code in toolsWithContent)
         {
+            var ids = definedIds.TryGetValue(code, out var definedForTool)
+                ? definedForTool
+                : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var hasDefinitions = definedIds.ContainsKey(code);
             var retiredForTool = RetiredQuestionIds.TryGetValue(code, out var explicitIds)
                 ? explicitIds
                 : [];
@@ -78,8 +89,8 @@ public static class ToolQuestionsSeeder
             if (existingRowsByTool.TryGetValue(code, out var rows))
             {
                 var stale = rows.Where(r =>
-                        !ids.Contains(r.QuestionId) ||
-                        retiredForTool.Contains(r.QuestionId, StringComparer.OrdinalIgnoreCase))
+                        retiredForTool.Contains(r.QuestionId, StringComparer.OrdinalIgnoreCase) ||
+                        (hasDefinitions && !ids.Contains(r.QuestionId)))
                     .ToList();
                 foreach (var row in stale)
                 {
@@ -95,8 +106,8 @@ public static class ToolQuestionsSeeder
              * translatable to SQL (EF would throw and abort the whole seed). */
             var staleLoc = SetOf(db, locType).Cast<ToolLocalizationBase>().ToList()
                 .Where(l => l.QuestionId != ToolLocalizationBase.ToolLevelQuestionId &&
-                            (!ids.Contains(l.QuestionId) ||
-                             retiredForTool.Contains(l.QuestionId, StringComparer.OrdinalIgnoreCase)))
+                            (retiredForTool.Contains(l.QuestionId, StringComparer.OrdinalIgnoreCase) ||
+                             (hasDefinitions && !ids.Contains(l.QuestionId))))
                 .ToList();
             foreach (var row in staleLoc)
             {
