@@ -79,8 +79,8 @@ public static class ToolStandards
     private const string OceanTomoUrl = "https://oceantomo.com/services/patent-indexes";
     private const string TradeSecret = "Trade-secret protection (WIPO / EU 2016/943)";
     private const string TradeSecretUrl = "https://www.wipo.int/en/web/trade-secrets";
-    private const string JobEvalPractice = "Point-factor job evaluation (ILO / Hay / Mercer IPE)";
-    private const string JobEvalUrl = "https://www.ilo.org/publications/job-evaluation";
+    private const string CareerFit = "O*NET Work Importance Locator / Holland RIASEC career fit";
+    private const string CareerFitUrl = "https://www.onetcenter.org/";
 
     public static IReadOnlyList<ToolStandardRow> All { get; } =
     [
@@ -110,13 +110,15 @@ public static class ToolStandards
                 E("IP asset inventory", StandardCoverage.Missing, "No register/portfolio."),
             ]),
 
-        new("JOB-EVAL", JobEvalPractice, null, JobEvalUrl,
-            ["Point-factor scoring"],
+        // NOTE: this tool is a work-values / career-fit quiz, NOT job evaluation —
+        // it must not be compared against Hay/Mercer point-factor standards.
+        new("JOB-EVAL", CareerFit, null, CareerFitUrl,
+            ["Work-value profiling", "Career-fit matching"],
             [
-                E("Compensable factors", StandardCoverage.InApp, "Factor-based questions."),
-                E("Weighting", StandardCoverage.InApp, "Weighted total."),
-                E("Grade structure", StandardCoverage.Missing, "No grade bands export."),
-                E("Market pay comparison", StandardCoverage.Missing, "No salary data."),
+                E("Work-value profiling", StandardCoverage.InApp, "16 core values, always/never pick-lists."),
+                E("Career-fit recommendations", StandardCoverage.InApp, "Scored job list from the picked values."),
+                E("Validated psychometric scoring", StandardCoverage.Missing, "No normed instrument or reliability testing."),
+                E("Role grading / pay bands", StandardCoverage.Missing, "Out of scope: not a job-evaluation tool."),
             ]),
 
         new("WIPO-DIAG", WipoDiag, "2021", WipoDiagUrl,
@@ -198,16 +200,19 @@ public static class ToolStandards
             [
                 E("Identifiable components", StandardCoverage.InApp, "Three modules with shares."),
                 E("Method disclosure", StandardCoverage.InApp, "Standard/method block on the form."),
-                E("Useful life / amortisation", StandardCoverage.Missing, "No schedule."),
+                E("Useful life / amortisation", StandardCoverage.Partial, "Straight-line schedule for capitalised R&D; HC/data components have none."),
                 E("Impairment test", StandardCoverage.Missing, "Not modelled."),
             ]),
 
+        // Seeder: "RFR + Premium + market + control scorecard + Monte Carlo range".
         new("ICON-SCORECARD", Iso10668, "2010", Iso10668Url,
-            ["Brand scorecard"],
+            ["Relief-from-royalty", "Premium", "Market comparison", "Control scorecard", "Monte Carlo"],
             [
-                E("Behavioural driver scoring", StandardCoverage.InApp, "Scorecard questions."),
-                E("Financial linkage", StandardCoverage.Partial, "Value output from scorecard."),
-                E("Research-backed inputs", StandardCoverage.Missing, "No consumer research data."),
+                E("Financial analysis (RFR)", StandardCoverage.InApp, "Royalty-relief value with a premium/market blend."),
+                E("Control / driver scorecard", StandardCoverage.InApp, "Scorecard drives the value."),
+                E("Uncertainty range", StandardCoverage.InApp, "Monte Carlo range."),
+                E("Research-backed behavioural data", StandardCoverage.Missing, "No consumer research data."),
+                E("Legal analysis", StandardCoverage.Missing, "No class/territory module."),
             ]),
 
         new("BINOMIAL", IvS210Options, null, null,

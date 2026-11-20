@@ -47,7 +47,8 @@ public sealed class EntitlementService(
     IQueryRepository<ApplicationUser> users,
     ICommandRepository<UserToolAccess> grantCommands,
     IQueryRepository<UserToolAccess> grants,
-    IQueryRepository<Payment> payments) : IEntitlementService
+    IQueryRepository<Payment> payments,
+    IQueryRepository<ToolForm> forms) : IEntitlementService
 {
     public async Task<bool> IsProAsync(Guid userId, CancellationToken ct = default)
     {
@@ -69,9 +70,22 @@ public sealed class EntitlementService(
             return true;
 
         var now = DateTime.UtcNow;
-        return await grants.TableNoTracking.AnyAsync(
-            g => g.UserId == userId && g.ToolCode == toolCode &&
-                 (g.ExpiresAt == null || g.ExpiresAt > now), ct);
+        if (await grants.TableNoTracking.AnyAsync(
+                g => g.UserId == userId && g.ToolCode == toolCode &&
+                     (g.ExpiresAt == null || g.ExpiresAt > now), ct))
+            return true;
+
+        /* A tool priced at 0 has no purchasable advanced tier (ToolForm:
+         * "0 = free advanced"). Stripping its advanced sections made them
+         * unreachable for every non-Pro user — e.g. rNPV/BINOMIAL tornadoes
+         * disappeared even though nobody can buy them. Unknown tools keep the
+         * previous behaviour (no unlock) by requiring a real 0 price row. */
+        var advancedPrice = await forms.TableNoTracking
+            .Where(f => f.ToolCode == toolCode)
+            .Select(f => (long?)f.AdvancedPriceToman)
+            .FirstOrDefaultAsync(ct);
+
+        return advancedPrice is 0;
     }
 
     public async Task<bool> HasPaidAdviceAsync(Guid userId, Guid submissionId, CancellationToken ct = default)

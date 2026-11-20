@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Application.Tools.Options;
@@ -208,6 +209,12 @@ public sealed class RnpvCalculatorRunner(IOptions<RnpvOptions> options) : IToolR
         public string? Name { get; set; }
         public List<RnpvStageInput>? Stages { get; set; }
         /** term key → value (rates as raw fractions, e.g. royaltyRate 0.03). */
+        /// <summary>
+        ///     term key → value. Accepts either a bare number or the tool page's
+        ///     `{ label, val, note, isPct }` object (it stores terms that way for
+        ///     save/restore) — see <see cref="TermMapConverter" />.
+        /// </summary>
+        [JsonConverter(typeof(TermMapConverter))]
         public Dictionary<string, double>? Terms { get; set; }
         public List<double>? Ramp { get; set; }
     }
@@ -217,6 +224,97 @@ public sealed class RnpvCalculatorRunner(IOptions<RnpvOptions> options) : IToolR
         public string? Name { get; set; }
         public double Duration { get; set; }
         public double Pos { get; set; }
+    }
+
+    /// <summary>
+    ///     Binds `terms` from either shape a caller can legitimately send:
+    ///     <c>{ "peakSales": 500 }</c> (documented API) or
+    ///     <c>{ "peakSales": { "label": "…", "val": 500, "isPct": false } }</c>
+    ///     (what the rNPV page holds and restores). Previously the object shape threw
+    ///     a JsonException and the run answered 400 INVALID_INPUT.
+    /// </summary>
+    private sealed class TermMapConverter : JsonConverter<Dictionary<string, double>>
+    {
+        public override Dictionary<string, double>? Read(
+            ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            if (reader.TokenType == JsonTokenType.Null) return null;
+            if (reader.TokenType != JsonTokenType.StartObject)
+                throw new JsonException("terms must be an object.");
+
+            var map = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+            while (reader.Read())
+            {
+                if (reader.TokenType == JsonTokenType.EndObject) return map;
+                if (reader.TokenType != JsonTokenType.PropertyName)
+                    throw new JsonException("terms entries must be key/value pairs.");
+
+                var key = reader.GetString() ?? throw new JsonException("term key is missing.");
+                reader.Read();
+                map[key] = ReadValue(ref reader);
+            }
+
+            throw new JsonException("unterminated terms object.");
+        }
+
+        /// <summary>Reads a number, numeric string, or <c>{ …, val: number }</c>.</summary>
+        private static double ReadValue(ref Utf8JsonReader reader)
+        {
+            switch (reader.TokenType)
+            {
+                case JsonTokenType.Number:
+                    return reader.GetDouble();
+
+                case JsonTokenType.String:
+                    return double.TryParse(
+                        reader.GetString(), NumberStyles.Any, CultureInfo.InvariantCulture, out var s)
+                        ? s
+                        : throw new JsonException("term is not a number.");
+
+                case JsonTokenType.StartObject:
+                    double? val = null;
+                    while (reader.Read())
+                    {
+                        if (reader.TokenType == JsonTokenType.EndObject) break;
+                        if (reader.TokenType != JsonTokenType.PropertyName)
+                            throw new JsonException("term object is malformed.");
+
+                        var name = reader.GetString();
+                        reader.Read();
+                        if (string.Equals(name, "val", StringComparison.OrdinalIgnoreCase))
+                            val = ReadValue(ref reader);
+                        else
+                            ConsumeValue(ref reader);
+                    }
+                    return val ?? throw new JsonException("term object has no numeric 'val'.");
+
+                default:
+                    throw new JsonException("term must be a number or an object with 'val'.");
+            }
+        }
+
+        /// <summary>Leaves the reader on the last token of an ignored value.</summary>
+        private static void ConsumeValue(ref Utf8JsonReader reader)
+        {
+            if (reader.TokenType is not (JsonTokenType.StartObject or JsonTokenType.StartArray))
+                return;
+
+            var depth = 0;
+            do
+            {
+                if (reader.TokenType is JsonTokenType.StartObject or JsonTokenType.StartArray) depth++;
+                else if (reader.TokenType is JsonTokenType.EndObject or JsonTokenType.EndArray) depth--;
+                if (depth == 0) return;
+            } while (reader.Read());
+        }
+
+        public override void Write(
+            Utf8JsonWriter writer, Dictionary<string, double> value, JsonSerializerOptions options)
+        {
+            writer.WriteStartObject();
+            foreach (var (key, v) in value) writer.WriteNumber(key, v);
+            writer.WriteEndObject();
+        }
     }
 
     public sealed class YearRowC
