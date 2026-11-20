@@ -166,6 +166,50 @@ public sealed record AdminToolContentRow(
     string? Description, string? DescriptionEn,
     List<AdminQuestionRow> Questions);
 
+// ─── Extended reporting (revenue split, funnel, tool performance) ───
+
+/// <summary>Revenue slice: label (payment kind / tool code), paid amount and payment count.</summary>
+public sealed record ReportSlice(string Label, long Amount, int Count);
+
+/// <summary>Conversion funnel: registered → ran a tool → paid → Pro.</summary>
+public sealed record AdminFunnelRow(int Registered, int RanTools, int Paying, int Pro);
+
+/// <summary>Per-tool outcome: submissions, average 0–100 score and distinct users.</summary>
+public sealed record ToolPerformanceRow(string ToolCode, int Count, double AvgScore, int DistinctUsers);
+
+/// <summary>A time-limited tool grant that runs out within the next 30 days.</summary>
+public sealed record ExpiringGrantRow(string UserEmail, string ToolCode, DateTime ExpiresAt);
+
+/// <summary>Customer ranked by lifetime paid amount.</summary>
+public sealed record TopCustomerRow(
+    Guid UserId, string Name, string Email, long PaidTotal, long Submissions);
+
+/// <summary>
+///     Additional admin reports: where the money comes from (by payment kind and by
+///     tool), how the funnel converts, signup cadence, which industries run tools,
+///     per-tool performance, grants about to expire and the best customers.
+/// </summary>
+public sealed record AdminReportsResponse(
+    List<ReportSlice> RevenueByKind,
+    List<ReportSlice> RevenueByTool,
+    AdminFunnelRow Funnel,
+    List<ChartPoint> SignupsByWeek,
+    List<ChartPoint> SubmissionsByIndustry,
+    List<ToolPerformanceRow> ToolPerformance,
+    List<ExpiringGrantRow> ExpiringGrants,
+    List<TopCustomerRow> TopCustomers);
+
+// ─── Payment gateway settings (admin-editable) ───
+
+/// <summary>Effective Zarinpal / Pro pricing settings shown in the admin panel.</summary>
+public sealed record AdminPaymentSettingsResponse(
+    string MerchantId,
+    bool Sandbox,
+    long ProMonthlyPriceToman,
+    int ProPlanDurationDays,
+    string FrontendRedirectUrl,
+    bool Persisted);
+
 /// <summary>Member of a company (admin "see members" modal).</summary>
 public sealed record AdminCompanyMemberRow(
     Guid Id, string? Name, string Email, string Plan, bool IsActive,

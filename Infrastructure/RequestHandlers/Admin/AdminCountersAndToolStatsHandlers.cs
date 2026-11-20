@@ -6,6 +6,7 @@ using Common.Exceptions;
 using Domain.Admin;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace RequestHandlers.Admin;
 
@@ -18,11 +19,24 @@ public sealed class GetAdminCountersQueryHandler(
     IQueryRepository<AdminSectionSeen> seen,
     IToolSubmissionQueries submissions,
     IQueryRepository<Domain.Users.ApplicationUser> users,
-    IQueryRepository<Domain.Messaging.ContactMessage> contacts)
+    IQueryRepository<Domain.Messaging.ContactMessage> contacts,
+    ICurrentUserAccessor currentUser,
+    Microsoft.Extensions.Caching.Memory.IMemoryCache cache)
     : IRequestHandler<GetAdminCountersQuery, AdminCountersResponse>
 {
+    /* The badge panel polls this, and two of the four counts scan the UNION ALL
+     * of all 23 per-tool tables. A short per-admin reuse window keeps polling
+     * cheap; marking a section seen drops the entry immediately. */
+    private static readonly TimeSpan CacheTtl = TimeSpan.FromSeconds(30);
+
+    internal static string CacheKey(Guid userId) => $"admin:counters:{userId}";
+
     public async Task<AdminCountersResponse> Handle(GetAdminCountersQuery request, CancellationToken ct)
     {
+        var cacheKey = CacheKey(currentUser.UserId);
+        if (cache.TryGetValue(cacheKey, out var cached) && cached is AdminCountersResponse cachedCounters)
+            return cachedCounters;
+
         var marks = await seen.TableNoTracking.ToListAsync(ct);
         DateTime Seen(string key) =>
             marks.FirstOrDefault(m => m.SectionKey == key)?.LastSeenAt ?? DateTime.MinValue;
@@ -52,7 +66,9 @@ public sealed class GetAdminCountersQueryHandler(
             .Where(s => s.IsActive && s.ModifiedAt != null && s.ModifiedAt > seenAdviser)
             .CountAsync(ct);
 
-        return new AdminCountersResponse(newSubmissions, newCustomers, newMessages, adviserUnseen);
+        var response = new AdminCountersResponse(newSubmissions, newCustomers, newMessages, adviserUnseen);
+        cache.Set(cacheKey, response, CacheTtl);
+        return response;
     }
 }
 
@@ -60,7 +76,8 @@ public sealed class GetAdminCountersQueryHandler(
 public sealed class MarkAdminSectionSeenCommandHandler(
     ICommandRepository<AdminSectionSeen> seenCommands,
     IQueryRepository<AdminSectionSeen> seenQueries,
-    ICurrentUserAccessor currentUser)
+    ICurrentUserAccessor currentUser,
+    Microsoft.Extensions.Caching.Memory.IMemoryCache cache)
     : IRequestHandler<MarkAdminSectionSeenCommand, Guid>
 {
     public async Task<Guid> Handle(MarkAdminSectionSeenCommand request, CancellationToken ct)
@@ -88,6 +105,9 @@ public sealed class MarkAdminSectionSeenCommandHandler(
             row.LastSeenAt = now;
             await seenCommands.UpdateAsync(row, ct);
         }
+
+        // The badge payload was computed against the old markers.
+        cache.Remove(GetAdminCountersQueryHandler.CacheKey(currentUser.UserId));
         return row.Id;
     }
 }

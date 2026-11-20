@@ -222,3 +222,21 @@ public sealed record CreateAdminUserCommand(
 
 /// <summary>Sets granular permission overrides — reserved for fine-grained access.</summary>
 public sealed record SetAdminUserActiveCommand(Guid Id, bool IsActive) : IRequest;
+
+// ════════════════════════════════════════════════════════════════
+// Extended reporting + payment gateway settings
+// ════════════════════════════════════════════════════════════════
+
+/// <summary>Revenue split, conversion funnel, tool performance and account signals.</summary>
+public sealed record GetAdminReportsQuery : IRequest<AdminReportsResponse>;
+
+/// <summary>Effective payment gateway / Pro pricing settings (DB override or appsettings).</summary>
+public sealed record GetAdminPaymentSettingsQuery : IRequest<AdminPaymentSettingsResponse>;
+
+/// <summary>Persists gateway / Pro pricing settings; applies to the next checkout immediately.</summary>
+public sealed record UpdateAdminPaymentSettingsCommand(
+    string MerchantId,
+    bool Sandbox,
+    long ProMonthlyPriceToman,
+    int ProPlanDurationDays,
+    string FrontendRedirectUrl) : IRequest<AdminPaymentSettingsResponse>;

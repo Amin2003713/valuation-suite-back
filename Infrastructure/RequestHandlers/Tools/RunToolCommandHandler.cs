@@ -10,6 +10,7 @@ using Application.Common;
 using Application.Interfaces;
 using Application.Interfaces.Base;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 
 namespace RequestHandlers.Tools;
@@ -113,8 +114,14 @@ public sealed class RunToolCommandHandler(
     IOptions<LanguageOptions> languageOptions,
     ICurrentUserAccessor currentUser,
     IQueryRepository<Domain.Users.ApplicationUser> usersQueries,
-    ICompanyQueryRepository companyQueries) : IRequestHandler<RunToolCommand, ToolRunResponse>
+    IMemoryCache cache) : IRequestHandler<RunToolCommand, ToolRunResponse>
 {
+    /// <summary>
+    ///     Per-tool question rows only change when staff edit content; they are
+    ///     needed on every run for answer validation. Same 60s window as the
+    ///     public tool-form cache, so edits show up just as quickly.
+    /// </summary>
+    private static readonly TimeSpan QuestionsCacheTtl = TimeSpan.FromSeconds(60);
     /// <summary>Minimum company profile (name + industry) a user must have before running any tool.</summary>
     private const string MissingProfileMessage =
         "برای اجرای ابزار ابتدا نام شرکت و حوزه فعالیت آن را در پروفایل تکمیل کنید. (PROFILE_MISSING)";
@@ -127,10 +134,10 @@ public sealed class RunToolCommandHandler(
         /* Company-profile gate: every run needs the user's company name and
          * industry (the spider-web benchmarks group results by industry). The
          * client shows a fill-in dialog when it sees the PROFILE_MISSING tag. */
-        var (user, company) = await LoadUserWithCompanyAsync(currentUser.UserId, ct)
+        var profile = await LoadProfileAsync(currentUser.UserId, ct)
             ?? throw Common.Exceptions.ValuationException.Forbidden("کاربر یافت نشد.");
 
-        if (company is null || string.IsNullOrWhiteSpace(company.Name) || string.IsNullOrWhiteSpace(company.Industry))
+        if (string.IsNullOrWhiteSpace(profile.CompanyName) || string.IsNullOrWhiteSpace(profile.CompanyIndustry))
             throw Common.Exceptions.ValuationException.Forbidden(MissingProfileMessage);
 
         /* Run-on-behalf: when the body carries runFor (or the dedicated endpoint
@@ -139,8 +146,8 @@ public sealed class RunToolCommandHandler(
          * caller and the context is preserved inside the stored input JSON. */
         var runFor = request.RunFor ?? ExtractRunFor(request.Input);
         var effectiveUserId = currentUser.UserId;
-        string? effectiveCompanyName = company.Name;
-        string? effectiveIndustry = company.Industry;
+        string? effectiveCompanyName = profile.CompanyName;
+        string? effectiveIndustry = profile.CompanyIndustry;
         if (runFor is { } ctx)
         {
             if (ctx.UserId is { } targetUser && await BelongsToCompanyAsync(targetUser, ctx.CompanyId, ct))
@@ -148,11 +155,11 @@ public sealed class RunToolCommandHandler(
                 effectiveUserId = targetUser;
                 // Attribute the snapshot to the target's own company (case: an
                 // admin in a different company runs for a client).
-                var targetProfile = await LoadUserWithCompanyAsync(targetUser, ct);
-                if (targetProfile is { Item2: { } tc })
+                var targetProfile = await LoadProfileAsync(targetUser, ct);
+                if (targetProfile is not null)
                 {
-                    effectiveCompanyName = tc.Name;
-                    effectiveIndustry = tc.Industry;
+                    effectiveCompanyName = targetProfile.CompanyName;
+                    effectiveIndustry = targetProfile.CompanyIndustry;
                 }
             }
         }
@@ -164,15 +171,25 @@ public sealed class RunToolCommandHandler(
         /* Server-side answer validation against the tool's stored questions
          * (required / answer type / option values / scale bounds). Row-driven:
          * a no-op for tools without question rows (calculators, search). */
-        var questionRows = await questions.ByTool(request.ToolCode)
-            .OrderBy(q => q.SortOrder)
-            .ToListAsync(ct);
+        var questionsKey = $"tool:questions:{request.ToolCode.ToUpperInvariant()}";
+        if (!cache.TryGetValue(questionsKey, out List<Application.Interfaces.ToolQuestionRow>? questionRows)
+            || questionRows is null)
+        {
+            questionRows = await questions.ByTool(request.ToolCode)
+                .OrderBy(q => q.SortOrder)
+                .ToListAsync(ct);
+            cache.Set(questionsKey, questionRows, QuestionsCacheTtl);
+        }
         ToolAnswerValidator.Validate(request.ToolCode, inputForStorage, questionRows);
 
         var runner = resolver.Resolve(request.ToolCode);
         var outcome = runner.Run(inputForStorage);
 
-        var advancedIncluded = await entitlements.CanViewAdvancedAsync(effectiveUserId, request.ToolCode, ct);
+        /* Reuse the Pro flag already read for the caller; a run-on-behalf target
+         * still needs its own entitlement read (the flag is per user). */
+        var advancedIncluded = effectiveUserId == currentUser.UserId
+            ? await entitlements.CanViewAdvancedAsync(effectiveUserId, request.ToolCode, profile.IsPro, ct)
+            : await entitlements.CanViewAdvancedAsync(effectiveUserId, request.ToolCode, ct);
         if (!advancedIncluded)
             outcome = outcome with { Result = AdvancedSections.Strip(outcome.Result) };
 
@@ -194,13 +211,13 @@ public sealed class RunToolCommandHandler(
             request.ToolCode,
             effectiveUserId,
             outcome.Name,
-            JsonSerializer.Serialize(WithRunForRemoved(request.Input)),
+            JsonSerializer.Serialize(inputForStorage),
             // WriteOptions: engine results may carry the know-how NaN/Infinity
             // quirks, which the default options refuse to serialise.
             JsonSerializer.Serialize(outcome.Result, ToolInput.WriteOptions),
             outcome.OverallScore,
             ResolveRunLanguage(request.Input));
-        submission.CompanyId = company.Id;
+        submission.CompanyId = profile.CompanyId ?? Guid.Empty;
         submission.CompanyName = effectiveCompanyName;
         submission.Industry = effectiveIndustry;
 
@@ -214,18 +231,39 @@ public sealed class RunToolCommandHandler(
             advancedIncluded);
     }
 
-    /// <summary>Returns (user, company) with the company loaded when the user has one.</summary>
-    private async Task<(Domain.Users.ApplicationUser user, Domain.Companies.Company? company)?>
-        LoadUserWithCompanyAsync(Guid userId, CancellationToken ct)
-    {
-        var user = await usersQueries
-            .FirstOrDefaultAsync(u => u.Id == userId, ct);
-        if (user is null || user.CompanyId is null)
-            return (user, null);
+    /// <summary>The handful of user/company fields a run needs, in one projection.</summary>
+    private sealed record RunProfile(
+        Guid? CompanyId, bool IsPro, string? CompanyName, string? CompanyIndustry);
 
-        var company = await companyQueries
-            .FirstOrDefaultAsync(c => c.Id == user.CompanyId.Value, ct);
-        return (user, company);
+    /// <summary>
+    ///     Reads the user plus the two company fields the run needs. This used to be a
+    ///     user query followed by a company query (two round-trips, both materializing
+    ///     full entities), and the Pro flag was fetched a third time by the entitlement
+    ///     check. One projected join now covers all of it.
+    /// </summary>
+    private async Task<RunProfile?> LoadProfileAsync(Guid userId, CancellationToken ct)
+    {
+        var row = await usersQueries.TableNoTracking
+            .Where(u => u.Id == userId)
+            .Select(u => new
+            {
+                u.CompanyId,
+                u.Plan,
+                u.PlanExpiresAt,
+                CompanyName = u.Company != null ? u.Company.Name : null,
+                CompanyIndustry = u.Company != null ? u.Company.Industry : null,
+            })
+            .FirstOrDefaultAsync(ct);
+
+        if (row is null)
+            return null;
+
+        // Mirrors ApplicationUser.IsPro (kept in memory so the comparison does not
+        // depend on the provider's DateTime.UtcNow translation).
+        var isPro = row.Plan == Domain.Companies.Plan.Pro
+                    && (row.PlanExpiresAt == null || row.PlanExpiresAt > DateTime.UtcNow);
+
+        return new RunProfile(row.CompanyId, isPro, row.CompanyName, row.CompanyIndustry);
     }
 
     private async Task<bool> BelongsToCompanyAsync(Guid userId, Guid? companyId, CancellationToken ct)

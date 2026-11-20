@@ -561,6 +561,164 @@ public class AdminQueryRepository(ReadOnlyDbContext dbContext) : IAdminQueryRepo
     }
 
     // ────────────────────────────────────────────────────────
+    // Extended reports (revenue split, funnel, tool performance)
+    // ────────────────────────────────────────────────────────
+
+    public async Task<AdminReportsResponse> GetReportsAsync(CancellationToken ct = default)
+    {
+        var paid = Db.Set<Payment>().AsNoTracking().Where(p => p.Status == PaymentStatus.Paid);
+
+        // Where the money comes from — fully grouped in SQL.
+        var kindRows = await paid
+            .GroupBy(p => p.Kind)
+            .Select(g => new { Kind = g.Key, Amount = g.Sum(x => (long?)x.Amount), Count = g.Count() })
+            .ToListAsync(ct);
+
+        var revenueByKind = kindRows
+            .Select(r => new ReportSlice(r.Kind.ToString(), r.Amount ?? 0, r.Count))
+            .OrderByDescending(r => r.Amount)
+            .ToList();
+
+        var toolRows = await paid
+            .Where(p => p.ToolCode != null)
+            .GroupBy(p => p.ToolCode!)
+            .Select(g => new { ToolCode = g.Key, Amount = g.Sum(x => (long?)x.Amount), Count = g.Count() })
+            .ToListAsync(ct);
+
+        var revenueByTool = toolRows
+            .Select(r => new ReportSlice(r.ToolCode, r.Amount ?? 0, r.Count))
+            .OrderByDescending(r => r.Amount)
+            .Take(15)
+            .ToList();
+
+        // Funnel: registered → ran at least one tool → ever paid → currently Pro.
+        var registered = await Db.Users.AsNoTracking().CountAsync(ct);
+        var proUsers = await Db.Users.AsNoTracking().CountAsync(u => u.Plan == Plan.Pro, ct);
+        var ranTools = (await ToolSubmissionQuery.All(Db)
+                .GroupBy(s => s.UserId)
+                .Select(g => g.Key)
+                .ToListAsync(ct))
+            .Count;
+        var paying = (await paid
+                .Select(p => p.UserId)
+                .Distinct()
+                .ToListAsync(ct))
+            .Count;
+
+        // Signup cadence, weekly buckets over the last 8 weeks (one timestamp column read).
+        var since = DateTime.UtcNow.Date.AddDays(-56);
+        var signupStamps = await Db.Users.AsNoTracking()
+            .Where(u => u.CreatedAt >= since)
+            .Select(u => u.CreatedAt)
+            .ToListAsync(ct);
+        var today = DateTime.UtcNow.Date;
+        var signupsByWeek = signupStamps
+            .GroupBy(d => (today - d.Date).Days / 7)
+            .OrderByDescending(g => g.Key)
+            .Select(g => new ChartPoint(
+                today.AddDays(-g.Key * 7).ToString("MM/dd"),
+                g.LongCount()))
+            .ToList();
+
+        // Which industries actually run tools (top 10 of the stored snapshots).
+        var industryRows = await ToolSubmissionQuery.All(Db)
+            .Where(s => s.Industry != null && s.Industry != "")
+            .GroupBy(s => s.Industry!)
+            .Select(g => new { Industry = g.Key, Count = g.Count() })
+            .ToListAsync(ct);
+        var submissionsByIndustry = industryRows
+            .OrderByDescending(r => r.Count)
+            .Take(10)
+            .Select(r => new ChartPoint(r.Industry, r.Count))
+            .ToList();
+
+        // Per-tool outcomes. Scores outside 0–100 are legacy currency figures — excluded
+        // in SQL so they can never skew an average.
+        var perfRows = await ToolSubmissionQuery.All(Db)
+            .Where(s => s.OverallScore != null && s.OverallScore >= 0 && s.OverallScore <= 100)
+            .GroupBy(s => s.ToolCode)
+            .Select(g => new
+            {
+                ToolCode = g.Key,
+                Count = g.Count(),
+                AvgScore = g.Average(x => x.OverallScore!.Value),
+            })
+            .ToListAsync(ct);
+
+        var pairs = await ToolSubmissionQuery.All(Db)
+            .GroupBy(s => new { s.ToolCode, s.UserId })
+            .Select(g => g.Key.ToolCode)
+            .ToListAsync(ct);
+        var usersPerTool = pairs.GroupBy(t => t).ToDictionary(g => g.Key, g => g.Count());
+
+        var toolPerformance = perfRows
+            .OrderByDescending(r => r.Count)
+            .Select(r => new ToolPerformanceRow(
+                r.ToolCode, r.Count, r.AvgScore, usersPerTool.GetValueOrDefault(r.ToolCode)))
+            .ToList();
+
+        // Grants running out in the next 30 days — the renewal call list.
+        var now = DateTime.UtcNow;
+        var soon = now.AddDays(30);
+        var expiringGrants = await Db.Set<UserToolAccess>().AsNoTracking()
+            .Where(g => g.ExpiresAt != null && g.ExpiresAt > now && g.ExpiresAt <= soon
+                        && g.ToolCode != "__PICK_CREDIT__")
+            .OrderBy(g => g.ExpiresAt)
+            .Take(50)
+            .Select(g => new ExpiringGrantRow(
+                Db.Users.Where(u => u.Id == g.UserId).Select(u => u.Email ?? "").FirstOrDefault() ?? "",
+                g.ToolCode,
+                g.ExpiresAt!.Value))
+            .ToListAsync(ct);
+
+        // Best customers by lifetime paid amount.
+        var topPay = await paid
+            .GroupBy(p => p.UserId)
+            .Select(g => new { UserId = g.Key, Amount = g.Sum(x => (long?)x.Amount) })
+            .ToListAsync(ct);
+
+        var topIds = topPay
+            .OrderByDescending(x => x.Amount ?? 0)
+            .Take(10)
+            .Select(x => x.UserId)
+            .ToList();
+
+        var topUsers = await Db.Users.AsNoTracking()
+            .Where(u => topIds.Contains(u.Id))
+            .Select(u => new { u.Id, u.DisplayName, u.Email })
+            .ToListAsync(ct);
+
+        var topSubs = await ToolSubmissionQuery.All(Db)
+            .Where(s => topIds.Contains(s.UserId))
+            .GroupBy(s => s.UserId)
+            .Select(g => new { UserId = g.Key, Count = g.Count() })
+            .ToListAsync(ct);
+
+        var topCustomers = topIds
+            .Select(id =>
+            {
+                var user = topUsers.FirstOrDefault(u => u.Id == id);
+                return new TopCustomerRow(
+                    id,
+                    user?.DisplayName ?? "",
+                    user?.Email ?? "",
+                    topPay.FirstOrDefault(p => p.UserId == id)?.Amount ?? 0,
+                    topSubs.FirstOrDefault(s => s.UserId == id)?.Count ?? 0);
+            })
+            .ToList();
+
+        return new AdminReportsResponse(
+            revenueByKind,
+            revenueByTool,
+            new AdminFunnelRow(registered, ranTools, paying, proUsers),
+            signupsByWeek,
+            submissionsByIndustry,
+            toolPerformance,
+            expiringGrants,
+            topCustomers);
+    }
+
+    // ────────────────────────────────────────────────────────
     // Helpers
     // ────────────────────────────────────────────────────────
 

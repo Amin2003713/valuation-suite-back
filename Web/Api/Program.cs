@@ -141,6 +141,8 @@ public class Program
 
         // ---- Zarinpal payment gateway ----
         builder.Services.Configure<ZarinpalOptions>(builder.Configuration.GetSection("Zarinpal"));
+        // Effective gateway/pricing settings: admin-edited DB row, appsettings as fallback.
+        builder.Services.AddScoped<Application.Payments.IPaymentSettingsProvider, PaymentSettingsProvider>();
         builder.Services.AddHttpClient<ZarinpalService>();
 
         var app = builder.Build();

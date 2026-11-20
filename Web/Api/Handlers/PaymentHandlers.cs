@@ -1,5 +1,6 @@
 using Application.Interfaces;
 using Application.Interfaces.Base;
+using Application.Payments;
 using Application.Tools;
 using Common.Exceptions;
 using Domain.Payments;
@@ -84,14 +85,14 @@ public static class ProPricing
 
 internal static class PaymentRules
 {
-    public static void EnsureGatewayConfigured(ZarinpalOptions options)
+    public static void EnsureGatewayConfigured(PaymentSettingsSnapshot settings)
     {
-        if (string.IsNullOrWhiteSpace(options.MerchantId) || options.MerchantId.StartsWith("YOUR_"))
+        if (!settings.IsConfigured)
             throw new ValuationException("درگاه پرداخت پیکربندی نشده است (Zarinpal MerchantId)");
     }
 
-    public static string CallbackOrDefault(string? callbackUrl, ZarinpalOptions options) =>
-        string.IsNullOrWhiteSpace(callbackUrl) ? options.FrontendRedirectUrl : callbackUrl;
+    public static string CallbackOrDefault(string? callbackUrl, string frontendRedirectUrl) =>
+        string.IsNullOrWhiteSpace(callbackUrl) ? frontendRedirectUrl : callbackUrl;
 
     public static Guid RequireUserId(Guid userId) =>
         userId == Guid.Empty ? throw new ForbiddenException("دسترسی غیرمجاز") : userId;
@@ -99,14 +100,14 @@ internal static class PaymentRules
 
 public sealed class StartProPaymentHandler(
     ZarinpalService zarinpal,
-    IOptions<ZarinpalOptions> options,
+    IPaymentSettingsProvider settingsProvider,
     UserManager<ApplicationUser> userManager,
     ICommandRepository<Payment> payments)
     : IRequestHandler<StartProPaymentCommand, StartPaymentResult>
 {
     public async Task<StartPaymentResult> Handle(StartProPaymentCommand request, CancellationToken ct)
     {
-        var settings = options.Value;
+        var settings = await settingsProvider.GetAsync(ct);
 
         var userId = PaymentRules.RequireUserId(request.UserId);
         var user = await userManager.FindByIdAsync(userId.ToString())
@@ -114,7 +115,7 @@ public sealed class StartProPaymentHandler(
 
         PaymentRules.EnsureGatewayConfigured(settings);
 
-        var amount = request.AmountToman ?? settings.DefaultAmountToman;
+        var amount = request.AmountToman ?? settings.ProMonthlyPriceToman;
         if (amount < 1000)
             throw new ValuationException("مبلغ پرداخت نامعتبر است");
 
@@ -124,7 +125,7 @@ public sealed class StartProPaymentHandler(
 
         var result = await zarinpal.CreatePaymentAsync(
             amount,
-            PaymentRules.CallbackOrDefault(request.CallbackUrl, settings),
+            PaymentRules.CallbackOrDefault(request.CallbackUrl, settings.FrontendRedirectUrl),
             payment.Description,
             user.Email,
             user.PhoneNumber,
@@ -146,7 +147,7 @@ public sealed class StartProPaymentHandler(
 
 public sealed class StartCheckoutHandler(
     ZarinpalService zarinpal,
-    IOptions<ZarinpalOptions> options,
+    IPaymentSettingsProvider settingsProvider,
     UserManager<ApplicationUser> userManager,
     ICommandRepository<Payment> payments,
     IQueryRepository<ToolForm> toolForms,
@@ -157,7 +158,7 @@ public sealed class StartCheckoutHandler(
 {
     public async Task<StartPaymentResult> Handle(StartCheckoutCommand request, CancellationToken ct)
     {
-        var settings = options.Value;
+        var settings = await settingsProvider.GetAsync(ct);
 
         var userId = PaymentRules.RequireUserId(request.UserId);
         var user = await userManager.FindByIdAsync(userId.ToString())
@@ -174,7 +175,7 @@ public sealed class StartCheckoutHandler(
             case "pro":
             {
                 var months = ProPricing.NormalizeMonths(request.Months);
-                amount = ProPricing.Price(settings.DefaultAmountToman, months);
+                amount = ProPricing.Price(settings.ProMonthlyPriceToman, months);
                 description = months == 1 ? "اشتراک یک‌ماهه Pro" : $"اشتراک {months}-ماهه Pro";
                 payment.Kind = PaymentKind.ProPlan;
                 payment.Months = months;
@@ -245,7 +246,7 @@ public sealed class StartCheckoutHandler(
 
         var result = await zarinpal.CreatePaymentAsync(
             amount,
-            PaymentRules.CallbackOrDefault(request.CallbackUrl, settings),
+            PaymentRules.CallbackOrDefault(request.CallbackUrl, settings.FrontendRedirectUrl),
             description,
             user.Email,
             user.PhoneNumber,
@@ -272,7 +273,7 @@ public sealed class StartCheckoutHandler(
 /// </summary>
 public sealed class HandlePaymentCallbackHandler(
     ZarinpalService zarinpal,
-    IOptions<ZarinpalOptions> options,
+    IPaymentSettingsProvider settingsProvider,
     UserManager<ApplicationUser> userManager,
     ICommandRepository<Payment> payments,
     IQueryRepository<AccessPackage> packages,
@@ -281,7 +282,7 @@ public sealed class HandlePaymentCallbackHandler(
 {
     public async Task<PaymentCallbackResult> Handle(HandlePaymentCallbackCommand request, CancellationToken ct)
     {
-        var settings = options.Value;
+        var settings = await settingsProvider.GetAsync(ct);
 
         PaymentCallbackResult Redirect(bool ok, string? message = null) => new(
             ok,
@@ -312,14 +313,14 @@ public sealed class HandlePaymentCallbackHandler(
         }
 
         payment.MarkPaid(verify.RefId);
-        await GrantEntitlementsAsync(payment, settings, ct);
+        await GrantEntitlementsAsync(payment, settings.ProPlanDurationDays, ct);
         await payments.SaveChangesAsync(ct);
 
         return Redirect(true);
     }
 
     /// <summary>Grants what the payment bought, by kind (domain side-effects on success).</summary>
-    private async Task GrantEntitlementsAsync(Payment payment, ZarinpalOptions settings, CancellationToken ct)
+    private async Task GrantEntitlementsAsync(Payment payment, int proPlanDurationDays, CancellationToken ct)
     {
         switch (payment.Kind)
         {
@@ -332,7 +333,7 @@ public sealed class HandlePaymentCallbackHandler(
                     var from = user.PlanExpiresAt is { } expiry && expiry > DateTime.UtcNow
                         ? expiry
                         : DateTime.UtcNow;
-                    var months = payment.Months ?? Math.Max(1, settings.ProPlanDurationDays / 30);
+                    var months = payment.Months ?? Math.Max(1, proPlanDurationDays / 30);
                     user.UpgradeToPro(from.AddMonths(months));
                     await userManager.UpdateAsync(user);
                 }

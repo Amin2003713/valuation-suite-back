@@ -14,7 +14,7 @@ public class QueryRepository<TEntity>(
     {
         try
         {
-            Logger.LogInformation("Fetching entity of type {EntityType}", typeof(TEntity).Name);
+            Logger.LogDebug("Fetching entity of type {EntityType}", typeof(TEntity).Name);
             return Entities.FindAsync(ids, cancellationToken);
         }
         catch (Exception ex)
@@ -28,7 +28,7 @@ public class QueryRepository<TEntity>(
     {
         try
         {
-            Logger.LogInformation("Fetching entity of type {EntityType}", typeof(TEntity).Name);
+            Logger.LogDebug("Fetching entity of type {EntityType}", typeof(TEntity).Name);
             return Entities.Find(ids);
         }
         catch (Exception ex)
@@ -44,7 +44,7 @@ public class QueryRepository<TEntity>(
     {
         try
         {
-            Logger.LogInformation("Fetching single entity of type {EntityType} with predicate", typeof(TEntity).Name);
+            Logger.LogDebug("Fetching single entity of type {EntityType} with predicate", typeof(TEntity).Name);
             return predicate is null
                 ? await TableNoTracking.SingleOrDefaultAsync(cancellationToken)
                 : await TableNoTracking.SingleOrDefaultAsync(predicate, cancellationToken);

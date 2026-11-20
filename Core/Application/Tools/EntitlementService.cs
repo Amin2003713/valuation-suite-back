@@ -30,6 +30,12 @@ public interface IEntitlementService
 {
     Task<bool> IsProAsync(Guid userId, CancellationToken ct = default);
     Task<bool> CanViewAdvancedAsync(Guid userId, string toolCode, CancellationToken ct = default);
+
+    /// <summary>
+    ///     Same check for a caller that already knows the user's Pro flag (the tool-run path
+    ///     reads the user row anyway) — skips the duplicate user query.
+    /// </summary>
+    Task<bool> CanViewAdvancedAsync(Guid userId, string toolCode, bool isPro, CancellationToken ct = default);
     Task<bool> HasPaidAdviceAsync(Guid userId, Guid submissionId, CancellationToken ct = default);
     Task GrantAsync(Guid userId, string toolCode, DateTime? expiresAt, Guid? paymentId, Guid? grantedBy, CancellationToken ct = default);
     Task GrantPickCreditsAsync(Guid userId, int credits, Guid paymentId, CancellationToken ct = default);
@@ -55,8 +61,11 @@ public sealed class EntitlementService(
     }
 
     public async Task<bool> CanViewAdvancedAsync(Guid userId, string toolCode, CancellationToken ct = default)
+        => await CanViewAdvancedAsync(userId, toolCode, await IsProAsync(userId, ct), ct);
+
+    public async Task<bool> CanViewAdvancedAsync(Guid userId, string toolCode, bool isPro, CancellationToken ct = default)
     {
-        if (await IsProAsync(userId, ct))
+        if (isPro)
             return true;
 
         var now = DateTime.UtcNow;

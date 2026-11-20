@@ -193,6 +193,44 @@ public class AdminController(
         => Ok(await mediator.Send(new GetAdminAnalyticsQuery(), ct));
 
     /// <summary>
+    ///     Extended reports: revenue by payment kind and by tool, conversion funnel,
+    ///     weekly signups, submissions per industry, per-tool performance, grants
+    ///     expiring in 30 days and the top customers by paid amount.
+    /// </summary>
+    [HttpGet("reports")]
+    [Authorize(Policy = "perm:dashboard.view")]
+    public async Task<IActionResult> Reports(CancellationToken ct)
+        => Ok(await mediator.Send(new GetAdminReportsQuery(), ct));
+
+    /// <summary>Effective Zarinpal / Pro pricing settings (DB override or appsettings).</summary>
+    [HttpGet("payment-settings")]
+    [Authorize(Policy = "perm:access.manage")]
+    public async Task<IActionResult> PaymentSettings(CancellationToken ct)
+        => Ok(await mediator.Send(new GetAdminPaymentSettingsQuery(), ct));
+
+    /// <summary>
+    ///     Saves gateway / subscription pricing. The checkout, the gateway client and the
+    ///     pricing catalog read these on the next request.
+    /// </summary>
+    [HttpPut("payment-settings")]
+    [Authorize(Policy = "perm:access.manage")]
+    public async Task<IActionResult> UpdatePaymentSettings(
+        [FromBody] UpdatePaymentSettingsRequest request, CancellationToken ct)
+        => Ok(await mediator.Send(new UpdateAdminPaymentSettingsCommand(
+            request.MerchantId,
+            request.Sandbox,
+            request.ProMonthlyPriceToman,
+            request.ProPlanDurationDays,
+            request.FrontendRedirectUrl), ct));
+
+    public sealed record UpdatePaymentSettingsRequest(
+        string MerchantId,
+        bool Sandbox,
+        long ProMonthlyPriceToman,
+        int ProPlanDurationDays,
+        string FrontendRedirectUrl);
+
+    /// <summary>
     ///     Sidebar/news badge counters (new items since the caller's last ack).
     ///     Poll ~30s from the admin shell; POST to counters/seen clears a badge.
     /// </summary>

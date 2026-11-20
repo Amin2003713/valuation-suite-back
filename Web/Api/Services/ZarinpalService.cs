@@ -2,6 +2,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Application.Payments;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -39,9 +40,20 @@ public class ZarinpalOptions
 public record ZarinpalStartResult(bool Success, string? Authority, string? GatewayUrl, int? Code, string? Error);
 public record ZarinpalVerifyResult(bool Success, string? RefId, long? AmountVerified, int? Code, string? Error);
 
-public class ZarinpalService(HttpClient http, IOptions<ZarinpalOptions> options, ILogger<ZarinpalService> logger)
+/// <summary>
+///     Zarinpal v4 client. The merchant id and sandbox flag come from the effective
+///     payment settings (admin-edited DB row, appsettings as fallback) on every call,
+///     so a change in the admin panel applies without a restart.
+/// </summary>
+public class ZarinpalService(HttpClient http, IPaymentSettingsProvider settings, ILogger<ZarinpalService> logger)
 {
-    private readonly ZarinpalOptions _options = options.Value;
+    private static string PaymentGatewayUrl(bool sandbox) => sandbox
+        ? "https://sandbox.zarinpal.com/pg/v4/payment"
+        : "https://payment.zarinpal.com/pg/v4/payment";
+
+    private static string StartPayUrl(bool sandbox, string authority) => sandbox
+        ? $"https://sandbox.zarinpal.com/pg/StartPay/{authority}"
+        : $"https://www.zarinpal.com/pg/StartPay/{authority}";
 
     /// <summary>
     ///     Step 1 — request a payment authority from Zarinpal (POST /pg/v4/payment/request.json).
@@ -57,6 +69,8 @@ public class ZarinpalService(HttpClient http, IOptions<ZarinpalOptions> options,
         // Zarinpal v4 rejects null values inside metadata ("metadata.mobile must be a
         // string") — only include fields we actually have, and omit metadata entirely
         // when both are missing.
+        var settingsSnapshot = await settings.GetAsync(ct);
+
         var metadata = new Dictionary<string, string>();
         if (!string.IsNullOrWhiteSpace(email))
             metadata["email"] = email.Trim();
@@ -65,7 +79,7 @@ public class ZarinpalService(HttpClient http, IOptions<ZarinpalOptions> options,
 
         var payload = new Dictionary<string, object>
         {
-            ["merchant_id"] = _options.MerchantId,
+            ["merchant_id"] = settingsSnapshot.MerchantId,
             ["amount"] = amountToman, // Toman
             ["callback_url"] = callbackUrl,
             ["description"] = description ?? "t",
@@ -75,13 +89,13 @@ public class ZarinpalService(HttpClient http, IOptions<ZarinpalOptions> options,
 
         try
         {
-            var response = await http.PostAsJsonAsync($"{_options.PaymentGatewayUrl}/request.json", payload, ct);
+            var response = await http.PostAsJsonAsync($"{PaymentGatewayUrl(settingsSnapshot.Sandbox)}/request.json", payload, ct);
             var body = await response.Content.ReadFromJsonAsync<ZarinpalResponse<ZarinpalRequestData>>(cancellationToken: ct);
 
             if (body?.Data is not null && body.Data.Authority is { Length: > 0 } authority)
             {
                 logger.LogInformation("Zarinpal payment requested, authority {Authority}", authority);
-                return new ZarinpalStartResult(true, authority, _options.StartPayUrl(authority), body.Data.Code, null);
+                return new ZarinpalStartResult(true, authority, StartPayUrl(settingsSnapshot.Sandbox, authority), body.Data.Code, null);
             }
 
             var error = body?.ErrorMessage() ?? "Unknown Zarinpal error";
@@ -100,16 +114,18 @@ public class ZarinpalService(HttpClient http, IOptions<ZarinpalOptions> options,
     /// </summary>
     public async Task<ZarinpalVerifyResult> VerifyPaymentAsync(long amountToman, string authority, CancellationToken ct = default)
     {
+        var settingsSnapshot = await settings.GetAsync(ct);
+
         var payload = new
         {
-            merchant_id = _options.MerchantId,
+            merchant_id = settingsSnapshot.MerchantId,
             amount = amountToman,
             authority,
         };
 
         try
         {
-            var response = await http.PostAsJsonAsync($"{_options.PaymentGatewayUrl}/verify.json", payload, ct);
+            var response = await http.PostAsJsonAsync($"{PaymentGatewayUrl(settingsSnapshot.Sandbox)}/verify.json", payload, ct);
             var body = await response.Content.ReadFromJsonAsync<ZarinpalResponse<ZarinpalVerifyData>>(cancellationToken: ct);
 
             // code 100 = verified, 101 = already verified

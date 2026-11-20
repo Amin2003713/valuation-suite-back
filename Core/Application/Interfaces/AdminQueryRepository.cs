@@ -43,6 +43,9 @@ public interface IAdminQueryRepository
     // ── Session 5: analytics, grants, adviser queue ──
 
     Task<AdminAnalyticsResponse> GetAnalyticsAsync(CancellationToken ct = default);
+
+    /// <summary>Revenue by kind/tool, funnel, signup cadence, tool performance and at-risk grants.</summary>
+    Task<AdminReportsResponse> GetReportsAsync(CancellationToken ct = default);
     Task<List<AdminGrantRow>> GetGrantsAsync(Guid? userId, CancellationToken ct = default);
     Task<List<AdminSubmissionRow>> GetAdviserQueueAsync(CancellationToken ct = default);
 

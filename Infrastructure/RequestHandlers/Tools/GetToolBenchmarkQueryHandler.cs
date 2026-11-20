@@ -4,6 +4,7 @@ using Application.Interfaces.Base;
 using Application.Tools;
 using Domain.Tools;
 using MediatR;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace RequestHandlers.Tools;
 
@@ -21,20 +22,37 @@ namespace RequestHandlers.Tools;
 /// </summary>
 public sealed class GetToolBenchmarkQueryHandler(
     IToolSubmissionQueries submissions,
-    IQueryRepository<Domain.Users.ApplicationUser> usersQueries)
+    IQueryRepository<Domain.Users.ApplicationUser> usersQueries,
+    Microsoft.Extensions.Caching.Memory.IMemoryCache cache)
     : IRequestHandler<GetToolBenchmarkQuery, ToolBenchmarkResponse>
 {
+    /* This endpoint runs on every result view and re-parses every stored result
+     * JSON of the tool, yet the data it aggregates (OTHER users' runs per industry)
+     * moves slowly. A short reuse window removes that scan from repeated views
+     * without changing the numbers: the caller's own submissions are excluded from
+     * both buckets, so a new run by the caller cannot invalidate the payload. */
+    private static readonly TimeSpan CacheTtl = TimeSpan.FromSeconds(30);
+
     public async Task<ToolBenchmarkResponse> Handle(GetToolBenchmarkQuery request, CancellationToken ct)
     {
-        var user = await usersQueries.TableNoTracking
-            .Include(u => u.Company)
-            .FirstOrDefaultAsync(u => u.Id == request.UserId, ct);
+        // Only the industry is needed — not the user row plus its company entity.
+        var myIndustry = await usersQueries.TableNoTracking
+            .Where(u => u.Id == request.UserId)
+            .Select(u => u.Company != null ? u.Company.Industry : null)
+            .FirstOrDefaultAsync(ct);
+
+        var cacheKey = $"bench:{request.ToolCode}:{request.UserId}:{myIndustry}";
+        if (cache.TryGetValue(cacheKey, out var cached) && cached is ToolBenchmarkResponse cachedResponse)
+            return cachedResponse;
 
         // Own submissions are excluded from the aggregate (the chart shows the
         // user's result as its own series — averaging it in would bias both).
+        // Project the two columns the aggregation reads: pulling whole rows also
+        // dragged every stored InputJson blob across the wire for nothing.
         var rows = await submissions.ByTool(request.ToolCode)
             .Where(s => s.OverallScore != null
                         && s.UserId != request.UserId)
+            .Select(s => new { s.ResultJson, s.Industry })
             .ToListAsync(ct);
 
         // Tool-metric extraction is agnostic of the specific tool: every tool's
@@ -47,7 +65,6 @@ public sealed class GetToolBenchmarkQueryHandler(
 
         var overallAgg = Aggregate(perSubmission.Select(x => x.metrics));
 
-        var myIndustry = user?.Company?.Industry;
         Dictionary<string, BenchmarkStat> areaAgg = new();
         if (!string.IsNullOrWhiteSpace(myIndustry))
         {
@@ -61,13 +78,16 @@ public sealed class GetToolBenchmarkQueryHandler(
             ? 0
             : perSubmission.Count(x => string.Equals(x.submission.Industry, myIndustry, StringComparison.OrdinalIgnoreCase));
 
-        return new ToolBenchmarkResponse(
+        var response = new ToolBenchmarkResponse(
             request.ToolCode,
             myIndustry,
             areaCount,
             perSubmission.Count,
             areaAgg,
             overallAgg);
+
+        cache.Set(cacheKey, response, CacheTtl);
+        return response;
     }
 
     /// <summary>Computes min/max/avg per metric key over many submissions.</summary>
@@ -84,38 +104,53 @@ public sealed class GetToolBenchmarkQueryHandler(
             }
         }
 
-        var result = new Dictionary<string, BenchmarkStat>();
+        var result = new Dictionary<string, BenchmarkStat>(acc.Count);
         foreach (var (key, values) in acc)
         {
             if (values.Count == 0) continue;
+
+            // One pass for min/max/sum, one sort shared by the two percentiles
+            // (Min/Max/Average + two OrderBy calls used to walk the sample five
+            // times, the last two each allocating a sorted copy).
+            var min = values[0];
+            var max = values[0];
+            var sum = 0.0;
+            foreach (var v in values)
+            {
+                if (v < min) min = v;
+                if (v > max) max = v;
+                sum += v;
+            }
+
+            var sorted = values.ToArray();
+            Array.Sort(sorted);
+
             result[key] = new BenchmarkStat(
-                values.Min(),
-                values.Max(),
-                values.Average(),
-                values.Count,
-                Median(values),
-                TopQuartile(values));
+                min,
+                max,
+                sum / sorted.Length,
+                sorted.Length,
+                Median(sorted),
+                TopQuartile(sorted));
         }
         return result;
     }
 
     /// <summary>Median of a sample (linear interpolation on the sorted list).</summary>
-    private static double Median(List<double> values)
+    private static double Median(double[] sorted)
     {
-        if (values.Count == 0) return 0;
-        var sorted = values.OrderBy(v => v).ToList();
-        var mid = (sorted.Count - 1) / 2.0;
+        if (sorted.Length == 0) return 0;
+        var mid = (sorted.Length - 1) / 2.0;
         var lo = (int)Math.Floor(mid);
         var hi = (int)Math.Ceiling(mid);
         return sorted[lo] + (sorted[hi] - sorted[lo]) * (mid - lo);
     }
 
     /// <summary>75th percentile (top quartile) of a sample.</summary>
-    private static double TopQuartile(List<double> values)
+    private static double TopQuartile(double[] sorted)
     {
-        if (values.Count == 0) return 0;
-        var sorted = values.OrderBy(v => v).ToList();
-        var pos = 0.75 * (sorted.Count - 1);
+        if (sorted.Length == 0) return 0;
+        var pos = 0.75 * (sorted.Length - 1);
         var lo = (int)Math.Floor(pos);
         var hi = (int)Math.Ceiling(pos);
         return sorted[lo] + (sorted[hi] - sorted[lo]) * (pos - lo);

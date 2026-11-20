@@ -22,7 +22,6 @@ public sealed class AskAdviserCommandHandler(
     IQueryRepository<AdviserMessage> history,
     ICommandRepository<AdviserMessage> historyCommands,
     IToolSubmissionQueries submissions,
-    IQueryRepository<Domain.Users.ApplicationUser> users,
     IQueryRepository<Domain.Tools.ToolForm> toolForms,
     IAdviserRateLimiter rateLimiter,
     ICurrentUserAccessor currentUser)
@@ -55,10 +54,10 @@ public sealed class AskAdviserCommandHandler(
         var dims = latest is null ? [] : ResultDimensions(latest.ResultJson);
         var peers = await PeerStats(request.ToolCode, currentUser.UserId, 50, ct);
 
+        // Industry comes from the submission snapshot when available; the user
+        // row was read here only to null out a value that was already null, so
+        // the extra round-trip is gone.
         string? industry = null;
-        var user = await users.FirstOrDefaultAsync(u => u.Id == currentUser.UserId, ct);
-        if (user?.CompanyId is { } cid && cid != Guid.Empty)
-            industry = null; // industry comes from the submission snapshot when available
 
         // Tool title (localized content falls back to the base column).
         var toolTitle = await toolForms.TableNoTracking

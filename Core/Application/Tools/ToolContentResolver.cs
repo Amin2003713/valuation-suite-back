@@ -42,6 +42,12 @@ public interface IToolContentResolver
 
     /// <summary>Loads the tool's info + questions localized for the request language.</summary>
     Task<LocalizedToolContent> GetAsync(string toolCode, CancellationToken ct = default);
+
+    /// <summary>
+    ///     Same, for a caller that already loaded the tool's <see cref="ToolForm"/> row
+    ///     (the form endpoint loads it anyway) — saves a duplicate query per request.
+    /// </summary>
+    Task<LocalizedToolContent> GetAsync(ToolForm form, CancellationToken ct = default);
 }
 
 public sealed class ToolContentResolver(
@@ -60,6 +66,12 @@ public sealed class ToolContentResolver(
             .FirstOrDefaultAsync(t => t.ToolCode == toolCode, ct)
             ?? throw global::Common.Exceptions.ValuationException.NotFound($"ابزار «{toolCode}» یافت نشد.");
 
+        return await GetAsync(form, ct);
+    }
+
+    public async Task<LocalizedToolContent> GetAsync(ToolForm form, CancellationToken ct = default)
+    {
+        var toolCode = form.ToolCode;
         var rows = await questions.ByTool(toolCode).OrderBy(q => q.SortOrder).ToListAsync(ct);
         var locRows = await localizations.ByTool(toolCode).ToListAsync(ct);
 

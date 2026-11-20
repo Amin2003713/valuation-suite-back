@@ -25,7 +25,7 @@ public sealed class GetToolFormQueryHandler(
 
         /* Tool info + questions, localized for the request language with per-field
          * fa fallback (per-tool <Tool>Questions / <Tool>Localizations tables). */
-        var localized = await content.GetAsync(form.ToolCode, ct);
+        var localized = await content.GetAsync(form, ct);
 
         return new ToolFormResponse(
             form.ToolCode, localized.Title, localized.Description,
