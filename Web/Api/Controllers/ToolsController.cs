@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using ApiFramework.Controller;
 using Application.Interfaces;
@@ -6,6 +7,7 @@ using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
+using RequestHandlers.Tools;
 using Web.Api.Services;
 
 namespace Web.Api.Controllers;
@@ -117,6 +119,31 @@ public class ToolsController(
     [Authorize]
     public async Task<IActionResult> Submissions([FromQuery] string? toolCode, CancellationToken ct)
         => Ok(await mediator.Send(new GetToolSubmissionsQuery { ToolCode = toolCode }, ct));
+
+    /// <summary>
+    ///     CSV export of one stored run (owner only; staff allowed for support).
+    ///     Plain input/result export — not a formatted valuation report.
+    /// </summary>
+    [HttpGet("submissions/{id:guid}/export")]
+    [Authorize]
+    public async Task<IActionResult> ExportSubmission(Guid id, CancellationToken ct)
+    {
+        var file = await mediator.Send(new ExportToolSubmissionQuery(id), ct);
+        // UTF-8 BOM so Excel opens Persian text without mojibake.
+        return File(Encoding.UTF8.GetBytes("\uFEFF" + file.Content), file.ContentType, file.FileName);
+    }
+
+    /// <summary>
+    ///     Standards each tool is aligned to, with the methods the engine applies and
+    ///     the element-by-element coverage. Public: it is reference data, not content.
+    /// </summary>
+    [HttpGet("standards")]
+    [AllowAnonymous]
+    public IActionResult Standards()
+    {
+        Response.Headers.CacheControl = "public, max-age=300";
+        return Ok(Application.Tools.ToolStandards.All);
+    }
 
     /// <summary>
     ///     Benchmark stats for the spider-web chart of one tool: per-metric

@@ -55,6 +55,18 @@ public sealed class RnpvCalculatorRunner(IOptions<RnpvOptions> options) : IToolR
         if (i.Ramp.Any(v => v < 0))
             throw ValuationException.BadRequest("منحنی فروش نمی‌تواند مقدار منفی داشته باشد.");
 
+        var result = Compute(i, o);
+        var tornado = Sensitivity(i, o, result.Rnpv);
+        return new ToolRunOutcome(result with { Tornado = tornado }, result.Rnpv, i.Name);
+    }
+
+    /// <summary>
+    ///     The ported rNPV model, unchanged. Extracted so the sensitivity sweep can
+    ///     re-run exactly this calculation on perturbed copies of the input, instead
+    ///     of approximating the impact of a driver.
+    /// </summary>
+    private static RnpvResult Compute(RnpvInput i, RnpvOptions o)
+    {
         double T(string key) => i.Terms![key];
 
         // ── Cumulative POS and milestone years ───────────────────────────────
@@ -139,10 +151,57 @@ public sealed class RnpvCalculatorRunner(IOptions<RnpvOptions> options) : IToolR
         var unriskedNpv = years.Sum(y =>
             (y.MilestoneNominal + y.RoyaltyNominal + y.SalesMilestoneNominal) * y.Discount);
 
-        var result = new RnpvResult(
-            years.ToArray(), rnpv, unriskedNpv, overallPos, cum.ToArray(), launchYear);
-        return new ToolRunOutcome(result, rnpv, i.Name);
+        return new RnpvResult(
+            years.ToArray(), rnpv, unriskedNpv, overallPos, cum.ToArray(), launchYear, []);
     }
+
+    /// <summary>
+    ///     Tornado analysis: each driver moves ±20% around the submitted value and the
+    ///     same model is re-run, so a row is a real rNPV result, not an estimate.
+    ///     Stage POS is scaled with a 0–1 clamp because it is a probability.
+    /// </summary>
+    private static TornadoRow[] Sensitivity(RnpvInput input, RnpvOptions o, double baseRnpv)
+    {
+        const double delta = 0.2;
+        var rows = new List<TornadoRow>();
+
+        void Add(string label, Func<double, RnpvInput> mutate)
+        {
+            var high = Compute(mutate(1 + delta), o).Rnpv;
+            var low = Compute(mutate(1 - delta), o).Rnpv;
+            rows.Add(new TornadoRow(label, Math.Min(low, high), Math.Max(low, high), baseRnpv));
+        }
+
+        RnpvInput ScaledTerm(string key, double factor)
+        {
+            var clone = Clone(input);
+            clone.Terms![key] *= factor;
+            return clone;
+        }
+
+        Add("نرخ تنزیل", f => ScaledTerm("discountRate", f));
+        Add("نرخ رویالتی", f => ScaledTerm("royaltyRate", f));
+        Add("اوج فروش", f => ScaledTerm("peakSales", f));
+        Add("POS مراحل", f =>
+        {
+            var clone = Clone(input);
+            foreach (var s in clone.Stages!)
+                s.Pos = Math.Clamp(s.Pos * f, 0, 1);
+            return clone;
+        });
+
+        return rows.OrderByDescending(r => Math.Abs(r.High - r.Low)).ToArray();
+    }
+
+    private static RnpvInput Clone(RnpvInput i) => new()
+    {
+        Name = i.Name,
+        Stages = i.Stages!
+            .Select(s => new RnpvStageInput { Name = s.Name, Duration = s.Duration, Pos = s.Pos })
+            .ToList(),
+        Terms = new Dictionary<string, double>(i.Terms!),
+        Ramp = [.. i.Ramp!],
+    };
 
     public sealed class RnpvInput
     {
@@ -187,5 +246,10 @@ public sealed class RnpvCalculatorRunner(IOptions<RnpvOptions> options) : IToolR
         [property: JsonPropertyName("unriskedNPV")] double UnriskedNpv,
         [property: JsonPropertyName("overallPOS")] double OverallPos,
         double[] Cum,
-        double LaunchYear);
+        double LaunchYear,
+        // ±20% one-at-a-time sensitivity, widest swing first.
+        TornadoRow[] Tornado);
+
+    /// <summary><see cref="Low"/> and <see cref="High"/> are rNPV with the driver at −20% and +20%.</summary>
+    public sealed record TornadoRow(string Label, double Low, double High, double Base);
 }

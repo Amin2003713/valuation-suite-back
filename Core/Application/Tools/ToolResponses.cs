@@ -20,7 +20,9 @@ public record ToolFormResponse(
     string Route,
     long AdvancedPriceToman,
     long AdvicePriceToman,
-    string Lang);
+    string Lang,
+    /// <summary>Standard, methods and element coverage the tool is aligned to.</summary>
+    ToolStandardRow? Standard = null);
 
 public record ToolRunResponse(
     Guid SubmissionId,

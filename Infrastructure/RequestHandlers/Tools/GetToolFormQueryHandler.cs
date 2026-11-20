@@ -31,7 +31,7 @@ public sealed class GetToolFormQueryHandler(
             form.ToolCode, localized.Title, localized.Description,
             form.Kind.ToString(), MergeQuestions(schema, localized),
             form.Route, form.AdvancedPriceToman, form.AdvicePriceToman,
-            localized.Lang);
+            localized.Lang, ToolStandards.For(form.ToolCode));
     }
 
     /// <summary>
