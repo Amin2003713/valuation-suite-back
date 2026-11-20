@@ -220,7 +220,7 @@ public static class ToolStandards
             [
                 E("Option-based valuation", StandardCoverage.InApp, "Binomial real-options engine."),
                 E("Volatility / timing inputs", StandardCoverage.InApp, "Explicit model inputs."),
-                E("Sensitivity view", StandardCoverage.Missing, "No tornado for this engine."),
+                E("Sensitivity analysis", StandardCoverage.InApp, "Tornado ±20% on S0, K, volatility, time and rate."),
             ]),
 
         new("SOFT-VAL", "Software IP valuation (cost / income / market)", null, null,

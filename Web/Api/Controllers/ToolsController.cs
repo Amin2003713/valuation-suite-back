@@ -134,6 +134,18 @@ public class ToolsController(
     }
 
     /// <summary>
+    ///     Paid printable report (HTML, print → PDF) for one stored run. Pro subscribers
+    ///     or buyers of that tool's advanced section only; 403 otherwise (server-gated).
+    /// </summary>
+    [HttpGet("submissions/{id:guid}/report")]
+    [Authorize]
+    public async Task<IActionResult> Report(Guid id, CancellationToken ct)
+    {
+        var report = await mediator.Send(new ExportToolSubmissionReportQuery(id), ct);
+        return Content(report.Html, "text/html; charset=utf-8");
+    }
+
+    /// <summary>
     ///     Standards each tool is aligned to, with the methods the engine applies and
     ///     the element-by-element coverage. Public: it is reference data, not content.
     /// </summary>
